@@ -3,8 +3,8 @@
 Proyecto local con n8n, PostgreSQL, Qdrant, Ollama y ngrok.
 
 Modelos:
-- qwen2.5:7b para analisis general local.
-- qwen2.5-coder:7b para soporte de programacion local.
+- qwen2.5:14b para analisis general local.
+- qwen2.5-coder:14b para soporte de programacion local.
 - nomic-embed-text para embeddings.
 - Soporte opcional para OpenAI mediante `AI_PROVIDER=openai` y modelos `gpt-5`.
 

@@ -91,3 +91,4 @@ H:\Programación\SERCOP\Sercop\backend\bin\Debug\net10.0\UglyToad.PdfPig.Package
 H:\Programación\SERCOP\Sercop\backend\bin\Debug\net10.0\UglyToad.PdfPig.Tokenization.dll
 H:\Programación\SERCOP\Sercop\backend\bin\Debug\net10.0\UglyToad.PdfPig.Tokens.dll
 H:\Programación\SERCOP\Sercop\backend\bin\Debug\net10.0\UglyToad.PdfPig.dll
+H:\Programación\SERCOP\Sercop\backend\bin\Debug\net10.0\backend.exe

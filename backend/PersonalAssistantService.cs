@@ -474,7 +474,9 @@ public sealed class PersonalAssistantService(
             Si algo no esta sustentado, di literalmente "No tengo evidencia suficiente".
             No uses etiquetas <think> ni expliques razonamiento interno.
             Usa siempre los encabezados Respuesta, Evidencia y Pendientes.
-            Si la consulta es tecnica, responde con pasos concretos y codigo pequeno solo si esta sustentado por el contexto.
+            Si la consulta es tecnica, responde con pasos concretos y codigo pequeno si esta sustentado por el contexto.
+            Si la consulta es tecnica y hay contexto de codigo suficiente, puedes proponer hipotesis de ingenieria y pasos de depuracion basados en patrones tecnicos habituales.
+            Toda hipotesis debe etiquetarse explicitamente como Hipotesis y nunca presentarse como hecho confirmado.
             Si hay documentos cargados, priorizalos por encima de la memoria y la web.
             Si el usuario pregunta por tus alcances, capacidades o que puedes hacer, responde con una lista amplia pero precisa basada en el perfil del sistema.
 
@@ -721,18 +723,50 @@ public sealed class PersonalAssistantService(
         PersonalAssistantAskRequest request,
         IReadOnlyList<PersonalAssistantUploadedDocument> uploadedDocuments)
     {
+        var technicalMarkers = new[]
+        {
+            "programacion",
+            "programación",
+            "programar",
+            "codigo",
+            "código",
+            "code",
+            "bug",
+            "debug",
+            "depurar",
+            "refactor",
+            "refactorizar",
+            "script",
+            "sql",
+            "c#",
+            "dotnet",
+            ".net",
+            "asp.net",
+            "typescript",
+            "javascript",
+            "node",
+            "python",
+            "java",
+            "go",
+            "rust",
+            "angular",
+            "react",
+            "docker",
+            "compose",
+            "api",
+            "endpoint",
+            "backend",
+            "frontend",
+            "postgres",
+            "postgresql",
+            "n8n",
+            "vscode",
+            "visual studio code"
+        };
+
         var isTechnical = HasCodeContext(request)
             || uploadedDocuments.Any(document => document.IsTechnical)
-            || question.Contains("codigo", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("code", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("c#", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("typescript", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("angular", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("dotnet", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("docker", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("api", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("vscode", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("visual studio code", StringComparison.OrdinalIgnoreCase);
+            || technicalMarkers.Any(marker => question.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
         return isTechnical ? GetCodeModel() : GetGeneralModel();
     }
@@ -819,12 +853,12 @@ public sealed class PersonalAssistantService(
     private string GetGeneralModel()
         => UseOpenAi()
             ? configuration["OPENAI_GENERAL_MODEL"] ?? "gpt-5.2"
-            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen2.5:7b";
+            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen2.5:14b";
 
     private string GetCodeModel()
         => UseOpenAi()
             ? configuration["OPENAI_CODE_MODEL"] ?? "gpt-5.2-codex"
-            : configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:7b";
+            : configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:14b";
 
     private bool UseOpenAi()
         => string.Equals(configuration["AI_PROVIDER"], "openai", StringComparison.OrdinalIgnoreCase)

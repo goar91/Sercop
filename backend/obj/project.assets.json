@@ -212,7 +212,7 @@
     ]
   },
   "packageFolders": {
-    "H:\\Programación\\SERCOP\\Sercop\\.dotnet\\.nuget\\packages\\": {},
+    "C:\\Users\\gerso\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
@@ -221,7 +221,7 @@
       "projectUniqueName": "H:\\Programación\\SERCOP\\Sercop\\backend\\backend.csproj",
       "projectName": "backend",
       "projectPath": "H:\\Programación\\SERCOP\\Sercop\\backend\\backend.csproj",
-      "packagesPath": "H:\\Programación\\SERCOP\\Sercop\\.dotnet\\.nuget\\packages\\",
+      "packagesPath": "C:\\Users\\gerso\\.nuget\\packages\\",
       "outputPath": "H:\\Programación\\SERCOP\\Sercop\\backend\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [

@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "CSPTZbeVotI=",
+  "dgSpecHash": "+pwPJiCkzco=",
   "success": true,
   "projectFilePath": "H:\\Programación\\SERCOP\\Sercop\\backend\\backend.csproj",
   "expectedPackageFiles": [
-    "H:\\Programación\\SERCOP\\Sercop\\.dotnet\\.nuget\\packages\\npgsql\\10.0.2\\npgsql.10.0.2.nupkg.sha512",
-    "H:\\Programación\\SERCOP\\Sercop\\.dotnet\\.nuget\\packages\\pdfpig\\0.1.13\\pdfpig.0.1.13.nupkg.sha512"
+    "C:\\Users\\gerso\\.nuget\\packages\\npgsql\\10.0.2\\npgsql.10.0.2.nupkg.sha512",
+    "C:\\Users\\gerso\\.nuget\\packages\\pdfpig\\0.1.13\\pdfpig.0.1.13.nupkg.sha512"
   ],
   "logs": []
 }

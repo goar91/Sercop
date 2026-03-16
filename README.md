@@ -87,6 +87,6 @@ Solucion local para monitorear procesos del SERCOP, confirmar invitaciones a HDM
 ## IA y VS Code
 
 - El asistente del CRM ya consulta `sercop_docs`, `code_kb` y `repo_code`.
-- Para una version local mas fuerte, el `.env` ahora usa `qwen2.5:7b` y `qwen2.5-coder:7b`.
+- Para una version local mas fuerte, el `.env` ahora usa `qwen2.5:14b` y `qwen2.5-coder:14b` con reparto entre GPU cuando la carga lo exige.
 - Si quieres una IA remota mas potente, configura `AI_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_GENERAL_MODEL=gpt-5.2` y `OPENAI_CODE_MODEL=gpt-5.2-codex`.
 - La extension local de VS Code vive en `tools\vscode-sercop-assistant\` y consume el endpoint `/api/assistant/ask`.

@@ -430,6 +430,7 @@ public sealed class AiAssistantService(
             Responde solo en espanol.
             Usa el contexto del CRM y las fuentes recuperadas.
             {{BuildPromptInstructions(module)}}
+            Si la consulta es tecnica y el usuario aporta contexto de codigo, puedes proponer hipotesis de ingenieria y pasos de depuracion, siempre marcando como Hipotesis lo que no este confirmado.
             No uses etiquetas <think>, no expliques razonamiento interno y no repitas estas instrucciones.
 
             Modulo activo: {{module}}
@@ -448,17 +449,40 @@ public sealed class AiAssistantService(
 
     private string ChooseModel(string module, string question)
     {
+        var technicalMarkers = new[]
+        {
+            "programacion",
+            "programación",
+            "programar",
+            "codigo",
+            "código",
+            "code",
+            "bug",
+            "debug",
+            "depurar",
+            "refactor",
+            "script",
+            "sql",
+            "c#",
+            "typescript",
+            "javascript",
+            "python",
+            "java",
+            "dotnet",
+            ".net",
+            "angular",
+            "react",
+            "docker",
+            "compose",
+            "api",
+            "endpoint",
+            "backend",
+            "frontend",
+            "vscode"
+        };
+
         var isTechnical = module == "code" ||
-            question.Contains("docker", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("compose", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("codigo", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("code", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("c#", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("typescript", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("angular", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("script", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("api", StringComparison.OrdinalIgnoreCase)
-            || question.Contains("endpoint", StringComparison.OrdinalIgnoreCase);
+            technicalMarkers.Any(marker => question.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
         return isTechnical
             ? GetCodeModel()
@@ -491,12 +515,12 @@ public sealed class AiAssistantService(
     private string GetGeneralModel()
         => UseOpenAi()
             ? configuration["OPENAI_GENERAL_MODEL"] ?? "gpt-5.2"
-            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen2.5:7b";
+            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen2.5:14b";
 
     private string GetCodeModel()
         => UseOpenAi()
             ? configuration["OPENAI_CODE_MODEL"] ?? "gpt-5.2-codex"
-            : configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:7b";
+            : configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:14b";
 
     private bool UseOpenAi()
         => string.Equals(configuration["AI_PROVIDER"], "openai", StringComparison.OrdinalIgnoreCase)

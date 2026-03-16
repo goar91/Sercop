@@ -545,7 +545,7 @@ public sealed class StudioService(
     private string GetGeneralModel()
         => UseOpenAi()
             ? configuration["OPENAI_GENERAL_MODEL"] ?? "gpt-5.2"
-            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen2.5:7b";
+            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen2.5:14b";
 
     private bool UseOpenAi()
         => string.Equals(configuration["AI_PROVIDER"], "openai", StringComparison.OrdinalIgnoreCase)
