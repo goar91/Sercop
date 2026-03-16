@@ -1,0 +1,595 @@
+:host {
+  --bg: #f4efe4;
+  --surface: rgba(255, 251, 244, 0.9);
+  --surface-strong: #fffaf2;
+  --line: rgba(44, 41, 35, 0.12);
+  --text: #1f1d1a;
+  --muted: #6f675f;
+  --brand: #0d6a61;
+  --brand-dark: #084e48;
+  --accent: #c96c37;
+  --danger: #8f2d2d;
+  --success: #19724a;
+  display: block;
+  color: var(--text);
+}
+
+.shell {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.25rem;
+}
+
+.panel,
+.subpanel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: 0 18px 40px rgba(42, 34, 18, 0.08);
+}
+
+.panel {
+  padding: 1.25rem;
+}
+
+.subpanel {
+  padding: 1rem;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(13, 106, 97, 0.18), transparent 30%),
+    linear-gradient(135deg, rgba(201, 108, 55, 0.16), rgba(255, 250, 242, 0.98));
+}
+
+.hero-copy {
+  max-width: 58rem;
+}
+
+.hero h1 {
+  margin: 0.35rem 0 0.75rem;
+  font-size: clamp(2rem, 4vw, 3.75rem);
+  line-height: 0.94;
+  letter-spacing: -0.04em;
+}
+
+.subtitle {
+  margin: 0;
+  max-width: 52rem;
+  color: var(--muted);
+  font-size: 1rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.stats-grid,
+.workspace,
+.config-grid,
+.assignment-layout,
+.insights-grid,
+.documents-grid,
+.split-columns,
+.detail-grid,
+.form-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.stats-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.stat-card {
+  display: grid;
+  gap: 0.4rem;
+  min-height: 9rem;
+}
+
+.stat-card span,
+.info-card span,
+.subpanel-header p,
+.history-item small,
+.table-row p,
+.workflow-item p,
+.meta-list dt {
+  color: var(--muted);
+}
+
+.stat-card strong {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.stat-card.accent {
+  background: linear-gradient(145deg, rgba(13, 106, 97, 0.95), rgba(8, 78, 72, 0.94));
+  color: #f9f6ef;
+}
+
+.stat-card.accent span,
+.stat-card.accent small {
+  color: rgba(249, 246, 239, 0.82);
+}
+
+.workspace {
+  grid-template-columns: 24rem minmax(0, 1fr);
+  align-items: start;
+}
+
+.workspace.secondary {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+}
+
+.sidebar {
+  display: grid;
+  gap: 1rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.panel-header,
+.subpanel-header,
+.workflow-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.panel-header h2,
+.subpanel-header h3,
+.workflow-meta h3 {
+  margin: 0.25rem 0 0;
+}
+
+.filters,
+.form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.filters label,
+.form-grid label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+label span {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid rgba(31, 29, 26, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  padding: 0.78rem 0.9rem;
+  color: var(--text);
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button.primary,
+.link-button {
+  background: var(--brand);
+  color: #fff;
+  padding: 0.82rem 1.15rem;
+  box-shadow: 0 12px 20px rgba(13, 106, 97, 0.24);
+  text-decoration: none;
+  text-align: center;
+}
+
+button.ghost {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--text);
+  padding: 0.82rem 1.15rem;
+  border: 1px solid var(--line);
+}
+
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.filter-actions,
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+
+.checkbox-row {
+  display: flex !important;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.checkbox-row input {
+  width: auto;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.filter-hint {
+  padding: 0.8rem 0.95rem;
+  border-radius: 14px;
+  background: rgba(201, 108, 55, 0.1);
+  border: 1px solid rgba(201, 108, 55, 0.18);
+  color: #7a4728;
+  font-size: 0.92rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(13, 106, 97, 0.08);
+  color: var(--brand);
+}
+
+.chip.muted {
+  background: rgba(31, 29, 26, 0.06);
+  color: var(--muted);
+}
+
+.chip.good {
+  background: rgba(25, 114, 74, 0.12);
+  color: var(--success);
+}
+
+.chip.source {
+  background: rgba(201, 108, 55, 0.12);
+  color: var(--accent);
+}
+
+.banner {
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  border: 1px solid transparent;
+}
+
+.banner.error {
+  background: rgba(143, 45, 45, 0.08);
+  border-color: rgba(143, 45, 45, 0.18);
+  color: var(--danger);
+}
+
+.banner.success {
+  background: rgba(25, 114, 74, 0.09);
+  border-color: rgba(25, 114, 74, 0.18);
+  color: var(--success);
+}
+
+.opportunity-list,
+.table-list,
+.history-list,
+.workflow-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.inline-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.keyword-filters {
+  padding-top: 0.25rem;
+}
+
+.opportunity-card,
+.workflow-item,
+.table-row.interactive {
+  width: 100%;
+  text-align: left;
+  padding: 1rem;
+  border-radius: 20px;
+  background: var(--surface-strong);
+  border: 1px solid rgba(31, 29, 26, 0.08);
+}
+
+.opportunity-card.selected,
+.workflow-item.selected,
+.table-row.interactive:hover {
+  border-color: rgba(13, 106, 97, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(13, 106, 97, 0.18);
+}
+
+.opportunity-card h3,
+.workflow-item strong,
+.table-row strong {
+  margin: 0.55rem 0 0.3rem;
+}
+
+.opportunity-card p,
+.workflow-item p,
+.table-row p,
+.history-item p,
+.workflow-meta p,
+.meta-list dd {
+  margin: 0;
+}
+
+.table-row small,
+.empty-state p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.opportunity-topline,
+.opportunity-meta,
+.opportunity-scores,
+.table-row,
+.workflow-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.opportunity-meta,
+.opportunity-scores {
+  margin-top: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.opportunity-scores div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.detail-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-grid.compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.info-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(31, 29, 26, 0.08);
+}
+
+.info-card strong {
+  font-size: 1rem;
+}
+
+.assignment-layout,
+.insights-grid,
+.documents-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.history-panel,
+.form-panel,
+.workflow-canvas-wrapper {
+  min-height: 100%;
+}
+
+.history-item {
+  padding: 0.85rem 0.95rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.split-columns {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+pre {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 18px;
+  background: #1f2725;
+  color: #dce8e3;
+  overflow: auto;
+  max-height: 22rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.meta-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0;
+}
+
+.meta-list div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.meta-list dt {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.meta-list dd {
+  font-size: 0.95rem;
+}
+
+.config-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.config-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.workflow-layout {
+  display: grid;
+  grid-template-columns: 18rem minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.workflow-canvas-shell {
+  overflow: auto;
+  border-radius: 22px;
+  border: 1px dashed rgba(13, 106, 97, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(13, 106, 97, 0.09), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(244, 239, 228, 0.7));
+  min-height: 24rem;
+}
+
+.workflow-canvas {
+  position: relative;
+}
+
+.workflow-node {
+  position: absolute;
+  width: 12rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: #fffef8;
+  border: 1px solid rgba(31, 29, 26, 0.14);
+  box-shadow: 0 14px 24px rgba(28, 23, 17, 0.08);
+}
+
+.workflow-node.disabled {
+  opacity: 0.65;
+}
+
+.workflow-node small {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--muted);
+}
+
+.keyword-row {
+  align-items: flex-start;
+}
+
+.keyword-chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 18rem;
+  text-align: center;
+  color: var(--muted);
+  border: 1px dashed rgba(31, 29, 26, 0.14);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.empty-state.small {
+  min-height: 8rem;
+}
+
+@media (max-width: 1360px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .workspace,
+  .workspace.secondary,
+  .workflow-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 960px) {
+  .hero,
+  .panel-header,
+  .subpanel-header,
+  .workflow-meta,
+  .opportunity-topline,
+  .opportunity-meta,
+  .opportunity-scores,
+  .table-row,
+  .workflow-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stats-grid,
+  .detail-grid.compact,
+  .assignment-layout,
+  .insights-grid,
+  .documents-grid,
+  .split-columns,
+  .config-grid,
+  .filters,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions,
+  .filter-actions,
+  .form-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .hero-actions button,
+  .filter-actions button,
+  .form-actions button,
+  .link-button {
+    flex: 1 1 auto;
+  }
+}

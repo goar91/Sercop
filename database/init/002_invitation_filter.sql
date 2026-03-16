@@ -1,0 +1,3 @@
+ALTER TABLE opportunities
+  ADD COLUMN IF NOT EXISTS invited_company_name TEXT,
+  ADD COLUMN IF NOT EXISTS is_invited_match BOOLEAN NOT NULL DEFAULT FALSE;

@@ -1,0 +1,10 @@
+.env
+.env.local
+.env.*.local
+.vscode/
+data/
+backups/
+logs/
+tmp/
+*.log
+

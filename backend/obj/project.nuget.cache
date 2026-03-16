@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "9xrnRJGapVo=",
+  "success": true,
+  "projectFilePath": "C:\\Automatización\\backend\\backend.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\UsuarioPc\\.nuget\\packages\\npgsql\\10.0.2\\npgsql.10.0.2.nupkg.sha512"
+  ],
+  "logs": []
+}

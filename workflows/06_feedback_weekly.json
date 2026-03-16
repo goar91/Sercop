@@ -1,0 +1,129 @@
+{
+  "name": "06 Feedback Weekly",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "c1",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT source, outcome, COUNT(*) AS total FROM feedback_events WHERE created_at >= NOW() - INTERVAL '7 days' GROUP BY source, outcome ORDER BY source, outcome;"
+      },
+      "id": "c2",
+      "name": "Load Weekly Feedback",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QX2Kr6LtP0sGmA1b",
+          "name": "Local Postgres CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows=items.map(i=>i.json);const lines=rows.length?rows.map(r=>`<li><strong>${r.source}</strong> :: ${r.outcome} = ${r.total}</li>`).join(''):'<li>No hay feedback registrado en los ultimos 7 dias.</li>';return[{json:{subject:'Resumen semanal de feedback SERCOP',html:`<p><strong>Resumen semanal</strong></p><ul>${lines}</ul><p>Revisa la hoja feedback y ajusta reglas include/exclude si detectas ruido repetido.</p>`}}];"
+      },
+      "id": "c3",
+      "name": "Build Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{$env.SMTP_FROM}}",
+        "toEmail": "={{$env.RESPONSIBLE_EMAIL}}",
+        "subject": "={{$json.subject}}",
+        "emailFormat": "html",
+        "html": "={{$json.html}}"
+      },
+      "id": "c4",
+      "name": "Email Responsible",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1020,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "Sm7Ny4BcT2rVhP8q",
+          "name": "Local SMTP Mailpit"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Weekly Feedback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Weekly Feedback": {
+      "main": [
+        [
+          {
+            "node": "Build Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email": {
+      "main": [
+        [
+          {
+            "node": "Email Responsible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9d0de617-f66c-4c8a-a427-9db6aa5f0106",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "active": false,
+  "tags": [],
+  "id": "1006"
+}

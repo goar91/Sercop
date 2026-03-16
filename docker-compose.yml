@@ -1,0 +1,196 @@
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE}
+    profiles:
+      - legacy-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: ${QDRANT_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT}:6333"
+      - "${QDRANT_GRPC_PORT}:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  ollama:
+    image: ${OLLAMA_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      OLLAMA_HOST: ${OLLAMA_HOST}
+      OLLAMA_ORIGINS: ${OLLAMA_ORIGINS}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE}
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL}
+      OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS}
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+
+  mailpit:
+    image: ${MAILPIT_IMAGE}
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  ollama-init:
+    image: ${OLLAMA_IMAGE}
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+        ollama pull "${OLLAMA_GENERAL_MODEL}"
+        ollama pull "${OLLAMA_CODE_MODEL}"
+        ollama pull "${OLLAMA_EMBED_MODEL}"
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    profiles:
+      - bootstrap
+
+  n8n:
+    image: ${N8N_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+      mailpit:
+        condition: service_started
+    ports:
+      - "${N8N_PORT}:5678"
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: ${N8N_DB_HOST}
+      DB_POSTGRESDB_PORT: ${N8N_DB_PORT}
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_LOG_LEVEL: ${N8N_LOG_LEVEL}
+      N8N_DIAGNOSTICS_ENABLED: ${N8N_DIAGNOSTICS_ENABLED}
+      N8N_PERSONALIZATION_ENABLED: ${N8N_PERSONALIZATION_ENABLED}
+      N8N_TEMPLATES_ENABLED: ${N8N_TEMPLATES_ENABLED}
+      N8N_DEFAULT_LOCALE: ${N8N_DEFAULT_LOCALE}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+      TZ: ${TZ}
+      EXECUTIONS_DATA_PRUNE: ${EXECUTIONS_DATA_PRUNE}
+      EXECUTIONS_DATA_MAX_AGE: ${EXECUTIONS_DATA_MAX_AGE}
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: ${N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE}
+      OLLAMA_GENERAL_MODEL: ${OLLAMA_GENERAL_MODEL}
+      OLLAMA_CODE_MODEL: ${OLLAMA_CODE_MODEL}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL}
+      RESPONSIBLE_EMAIL: ${RESPONSIBLE_EMAIL}
+      SMTP_FROM: ${SMTP_FROM}
+      MATCH_THRESHOLD: ${MATCH_THRESHOLD}
+      INVITED_COMPANY_NAME: ${INVITED_COMPANY_NAME}
+      INVITED_COMPANY_RUC: ${INVITED_COMPANY_RUC}
+      OCDS_YEAR: ${OCDS_YEAR}
+      POLL_MINUTES: ${POLL_MINUTES}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/import/workflows:ro
+      - ./config:/workspace/config:ro
+      - ./knowledge:/workspace/knowledge
+      - ./backups:/workspace/backups
+
+  ngrok:
+    image: ${NGROK_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      n8n:
+        condition: service_started
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+        if [ -n "${NGROK_DOMAIN}" ]; then
+          ngrok http --authtoken "${NGROK_AUTHTOKEN}" --domain "${NGROK_DOMAIN}" n8n:5678
+        else
+          ngrok http --authtoken "${NGROK_AUTHTOKEN}" n8n:5678
+        fi
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+      NGROK_DOMAIN: ${NGROK_DOMAIN}
+    ports:
+      - "4040:4040"
+    profiles:
+      - tunnel
+
+  crm-ngrok:
+    image: ${NGROK_IMAGE}
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - |
+        set -eu
+        if [ -n "${CRM_NGROK_DOMAIN}" ]; then
+          ngrok http --authtoken "${NGROK_AUTHTOKEN}" --domain "${CRM_NGROK_DOMAIN}" host.docker.internal:${CRM_EXTERNAL_TARGET_PORT}
+        else
+          ngrok http --authtoken "${NGROK_AUTHTOKEN}" host.docker.internal:${CRM_EXTERNAL_TARGET_PORT}
+        fi
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+      CRM_NGROK_DOMAIN: ${CRM_NGROK_DOMAIN}
+      CRM_EXTERNAL_TARGET_PORT: ${CRM_EXTERNAL_TARGET_PORT}
+    ports:
+      - "4041:4040"
+    profiles:
+      - crm-ngrok
+
+  crm-cloudflared:
+    image: ${CLOUDFLARED_IMAGE}
+    restart: unless-stopped
+    entrypoint:
+      - cloudflared
+      - tunnel
+      - --no-autoupdate
+      - --url
+      - http://host.docker.internal:${CRM_EXTERNAL_TARGET_PORT}
+    profiles:
+      - crm-tunnel
+
+volumes:
+  postgres_data:
+  qdrant_data:
+  ollama_data:
+  n8n_data:

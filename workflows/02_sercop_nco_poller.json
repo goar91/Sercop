@@ -1,0 +1,287 @@
+{
+  "name": "02 SERCOP NCO Poller",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d00",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d01",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        260,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT rule_type, scope, keyword, family, weight, notes FROM keyword_rules WHERE active = TRUE AND scope IN ('all', 'nco') ORDER BY rule_type ASC, weight DESC, keyword ASC;"
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d02",
+      "name": "Load Keyword Rules",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QX2Kr6LtP0sGmA1b",
+          "name": "Local Postgres CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/NCO/NCORetornaRegistros.cpe?lot=1&draw=1&start=0&length=300",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d03",
+      "name": "Fetch NCO List",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        320
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const threshold = Number($env.MATCH_THRESHOLD || 60);\nconst rules = $items('Load Keyword Rules').map((item) => item.json);\nconst includeRules = rules.filter((rule) => String(rule.rule_type || '') === 'include');\nconst excludeRules = rules.filter((rule) => String(rule.rule_type || '') === 'exclude');\n\nfunction normalizeText(value) {\n  return String(value ?? '').toLowerCase();\n}\n\nfunction uniqueHits(rawHits) {\n  const deduped = new Map();\n\n  for (const hit of rawHits) {\n    const keyword = String(hit.keyword || '').trim().toLowerCase();\n    if (!keyword || deduped.has(keyword)) {\n      continue;\n    }\n\n    deduped.set(keyword, {\n      keyword,\n      family: hit.family || null,\n      weight: Number(hit.weight || 1) || 1,\n    });\n  }\n\n  return Array.from(deduped.values());\n}\n\nfunction parseDetailUrl(anchorHtml) {\n  const match = String(anchorHtml || '').match(/href=([^\\s>]+)/i);\n  if (!match?.[1]) {\n    return '';\n  }\n\n  const relativeUrl = match[1].replace(/^['\"]|['\"]$/g, '');\n  if (/^https?:\\/\\//i.test(relativeUrl)) {\n    return relativeUrl;\n  }\n\n  return 'https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/NCO/' +\n    relativeUrl\n      .replace(/^\\.\\.\\/NCO\\//i, '')\n      .replace(/^\\.\\.\\//, '');\n}\n\nfunction parseDateScore(value) {\n  const timestamp = Date.parse(String(value || ''));\n  return Number.isFinite(timestamp) ? timestamp : 0;\n}\n\nfunction typeScore(processType) {\n  return /infima|infimas|necesidad/i.test(String(processType || '')) ? 20 : 15;\n}\n\nlet parsedPayload = $json;\n\nif (typeof $json?.data === 'string') {\n  try {\n    parsedPayload = JSON.parse($json.data);\n  } catch {\n    parsedPayload = { data: [] };\n  }\n}\n\nif (typeof parsedPayload === 'string') {\n  try {\n    parsedPayload = JSON.parse(parsedPayload);\n  } catch {\n    parsedPayload = { data: [] };\n  }\n}\n\nconst rows = Array.isArray(parsedPayload?.data) ? parsedPayload.data : [];\nconst candidates = [];\n\nfor (const row of rows) {\n  const detailUrl = parseDetailUrl(row.url);\n  if (!detailUrl) {\n    continue;\n  }\n\n  const title = String(row.objeto_contratacion || 'Sin titulo').trim();\n  const entity = String(row.razon_social || 'Sin entidad').trim();\n  const processType = String(row.tipo_necesidad || 'Necesidad').trim();\n  const haystack = normalizeText(\n    [\n      title,\n      entity,\n      processType,\n      row.provincia,\n      row.canton,\n      row.codigo_contratacion,\n      row.contacto,\n    ].join(' '),\n  );\n\n  const includeHits = uniqueHits(\n    includeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())),\n  );\n  const excludeHits = uniqueHits(\n    excludeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())),\n  );\n  const includeWeight = includeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const excludeWeight = excludeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const taxonomyScore = Math.max(0, Math.min(60, Math.round(includeWeight * 25) - Math.round(excludeWeight * 25)));\n  const heuristicScore = includeHits.length > 0 ? 15 : 0;\n  const matchScore = Math.max(0, Math.min(100, taxonomyScore + typeScore(processType) + heuristicScore));\n\n  if (matchScore < threshold) {\n    continue;\n  }\n\n  candidates.push({\n    json: {\n      source: 'nco',\n      external_id: String(row.codigo_contratacion || row.tcom_necesidad_contratacion_id || '').trim(),\n      ocid_or_nic: String(row.codigo_contratacion || row.tcom_necesidad_contratacion_id || '').trim(),\n      process_code: String(row.codigo_contratacion || row.tcom_necesidad_contratacion_id || '').trim(),\n      titulo: title,\n      entidad: entity,\n      tipo: processType,\n      fecha_publicacion: String(row.fecha_publicacion || '').trim(),\n      fecha_limite: String(row.fecha_limite_propuesta || '').trim(),\n      monto_ref: null,\n      moneda: 'USD',\n      url: detailUrl,\n      initial_keywords: includeHits.map((hit) => hit.keyword),\n      candidate_payload: row,\n      preview_score: matchScore,\n    },\n  });\n}\n\nreturn candidates\n  .sort((left, right) => parseDateScore(right.json.fecha_publicacion) - parseDateScore(left.json.fecha_publicacion))\n  .slice(0, 180);"
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d04",
+      "name": "Normalize NCO List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.url}}",
+        "responseFormat": "string",
+        "options": {
+          "timeout": 45000
+        }
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d05",
+      "name": "Fetch NCO Detail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        320
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const threshold = Number($env.MATCH_THRESHOLD || 60);\nconst rules = $items('Load Keyword Rules').map((item) => item.json);\nconst includeRules = rules.filter((rule) => String(rule.rule_type || '') === 'include');\nconst excludeRules = rules.filter((rule) => String(rule.rule_type || '') === 'exclude');\n\nfunction sqlText(value) {\n  return String(value ?? '').replace(/'/g, \"''\");\n}\n\nfunction sqlNumber(value) {\n  if (value === null || value === undefined || value === '') {\n    return 'NULL';\n  }\n\n  const parsed = Number(value);\n  return Number.isFinite(parsed) ? String(parsed) : 'NULL';\n}\n\nfunction normalizeText(value) {\n  return String(value ?? '').toLowerCase();\n}\n\nfunction stripHtml(value) {\n  return String(value ?? '')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction uniqueHits(rawHits) {\n  const deduped = new Map();\n\n  for (const hit of rawHits) {\n    const keyword = String(hit.keyword || '').trim().toLowerCase();\n    if (!keyword || deduped.has(keyword)) {\n      continue;\n    }\n\n    deduped.set(keyword, {\n      keyword,\n      family: hit.family || null,\n      weight: Number(hit.weight || 1) || 1,\n    });\n  }\n\n  return Array.from(deduped.values());\n}\n\nfunction typeScore(processType) {\n  return /infima|infimas|necesidad/i.test(String(processType || '')) ? 20 : 15;\n}\n\nconst out = [];\nconst inputs = $input.all();\nfor (let index = 0; index < inputs.length; index++) {\n  const html = String(inputs[index].json?.body || inputs[index].json || '');\n  const candidate = $item(index).$node['Normalize NCO List'].json;\n  const text = stripHtml(html);\n  const textLower = text.toLowerCase();\n  const haystack = normalizeText(\n    [\n      candidate.titulo,\n      candidate.entidad,\n      candidate.tipo,\n      candidate.ocid_or_nic,\n      text,\n    ].join(' '),\n  );\n\n  const seededHits = Array.isArray(candidate.initial_keywords)\n    ? candidate.initial_keywords.map((keyword) => ({ keyword, weight: 1 }))\n    : [];\n  const includeHits = uniqueHits(\n    includeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())).concat(seededHits),\n  );\n  const excludeHits = uniqueHits(\n    excludeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())),\n  );\n  const includeWeight = includeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const excludeWeight = excludeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const taxonomyScore = Math.max(0, Math.min(60, Math.round(includeWeight * 25) - Math.round(excludeWeight * 25)));\n  const heuristicScore = includeHits.length > 0 ? 15 : 0;\n  const matchScore = Math.max(0, Math.min(100, taxonomyScore + typeScore(candidate.tipo) + heuristicScore));\n\n  if (matchScore < threshold) {\n    continue;\n  }\n\n  const recommendation = 'revisar';\n  const rawPayload = {\n    source: 'nco',\n    candidate: candidate.candidate_payload,\n    detail_url: candidate.url,\n    detail_text_excerpt: text.slice(0, 5000),\n  };\n\n  out.push({\n    json: {\n      source: 'nco',\n      external_id: candidate.external_id,\n      ocid_or_nic: candidate.ocid_or_nic,\n      process_code: candidate.process_code || candidate.ocid_or_nic,\n      titulo: candidate.titulo,\n      entidad: candidate.entidad,\n      tipo: candidate.tipo,\n      fecha_publicacion: candidate.fecha_publicacion,\n      fecha_limite: candidate.fecha_limite,\n      monto_ref: candidate.monto_ref,\n      moneda: candidate.moneda || 'USD',\n      url: candidate.url,\n      invited_company_name: null,\n      is_invited_match: false,\n      keywords_hit: includeHits.map((hit) => hit.keyword),\n      keywords_hit_csv: includeHits.map((hit) => hit.keyword).join(','),\n      match_score: matchScore,\n      ai_score: 0,\n      recomendacion: recommendation,\n      estado: 'nuevo',\n      vendedor: '',\n      resultado: '',\n      raw_payload_string: sqlText(JSON.stringify(rawPayload)),\n      source_sql: sqlText('nco'),\n      external_id_sql: sqlText(candidate.external_id),\n      ocid_or_nic_sql: sqlText(candidate.ocid_or_nic),\n      process_code_sql: sqlText(candidate.process_code || candidate.ocid_or_nic),\n      titulo_sql: sqlText(candidate.titulo),\n      entidad_sql: sqlText(candidate.entidad),\n      tipo_sql: sqlText(candidate.tipo),\n      fecha_publicacion_sql: sqlText(candidate.fecha_publicacion),\n      fecha_limite_sql: sqlText(candidate.fecha_limite),\n      monto_ref_sql: sqlNumber(candidate.monto_ref),\n      moneda_sql: sqlText(candidate.moneda || 'USD'),\n      url_sql: sqlText(candidate.url),\n      invited_company_name_sql: '',\n      recomendacion_sql: sqlText(recommendation),\n      is_invited_match_sql: 'FALSE',\n    },\n  });\n}\n\nreturn out;"
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d06",
+      "name": "Score Filter Prepare",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO opportunities (\n  source,\n  external_id,\n  ocid_or_nic,\n  process_code,\n  titulo,\n  entidad,\n  tipo,\n  fecha_publicacion,\n  fecha_limite,\n  monto_ref,\n  moneda,\n  url,\n  invited_company_name,\n  is_invited_match,\n  keywords_hit,\n  match_score,\n  ai_score,\n  recomendacion,\n  estado,\n  vendedor,\n  resultado,\n  raw_payload\n) VALUES (\n  '{{$json.source_sql}}',\n  '{{$json.external_id_sql}}',\n  '{{$json.ocid_or_nic_sql}}',\n  '{{$json.process_code_sql}}',\n  '{{$json.titulo_sql}}',\n  '{{$json.entidad_sql}}',\n  '{{$json.tipo_sql}}',\n  CASE WHEN '{{$json.fecha_publicacion_sql}}' = '' THEN NULL ELSE '{{$json.fecha_publicacion_sql}}'::timestamptz END,\n  CASE WHEN '{{$json.fecha_limite_sql}}' = '' THEN NULL ELSE '{{$json.fecha_limite_sql}}'::timestamptz END,\n  {{$json.monto_ref_sql}},\n  '{{$json.moneda_sql}}',\n  '{{$json.url_sql}}',\n  CASE WHEN {{$json.is_invited_match_sql}} THEN '{{$json.invited_company_name_sql}}' ELSE NULL END,\n  {{$json.is_invited_match_sql}},\n  CASE WHEN '{{$json.keywords_hit_csv}}' = '' THEN ARRAY[]::text[] ELSE string_to_array('{{$json.keywords_hit_csv}}', ',') END,\n  {{$json.match_score}},\n  {{$json.ai_score}},\n  '{{$json.recomendacion_sql}}',\n  '{{$json.estado}}',\n  '{{$json.vendedor}}',\n  '{{$json.resultado}}',\n  '{{$json.raw_payload_string}}'::jsonb\n)\nON CONFLICT (source, external_id)\nDO UPDATE SET\n  process_code = COALESCE(NULLIF(EXCLUDED.process_code, ''), opportunities.process_code),\n  titulo = EXCLUDED.titulo,\n  entidad = EXCLUDED.entidad,\n  tipo = EXCLUDED.tipo,\n  fecha_publicacion = EXCLUDED.fecha_publicacion,\n  fecha_limite = EXCLUDED.fecha_limite,\n  monto_ref = COALESCE(EXCLUDED.monto_ref, opportunities.monto_ref),\n  moneda = COALESCE(NULLIF(EXCLUDED.moneda, ''), opportunities.moneda),\n  url = EXCLUDED.url,\n  invited_company_name = CASE\n    WHEN EXCLUDED.is_invited_match THEN EXCLUDED.invited_company_name\n    ELSE opportunities.invited_company_name\n  END,\n  is_invited_match = opportunities.is_invited_match OR EXCLUDED.is_invited_match,\n  keywords_hit = EXCLUDED.keywords_hit,\n  match_score = EXCLUDED.match_score,\n  recomendacion = EXCLUDED.recomendacion,\n  raw_payload = EXCLUDED.raw_payload,\n  updated_at = NOW()\nRETURNING\n  id,\n  source,\n  external_id,\n  titulo,\n  entidad,\n  tipo,\n  url,\n  match_score,\n  fecha_limite,\n  invited_company_name,\n  is_invited_match,\n  keywords_hit,\n  recomendacion,\n  estado,\n  (xmax = 0) AS was_inserted;"
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d07",
+      "name": "Upsert Opportunity",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1820,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "QX2Kr6LtP0sGmA1b",
+          "name": "Local Postgres CRM"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input\n  .all()\n  .filter((item) => Boolean(item.json.was_inserted) && Boolean(item.json.is_invited_match));"
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d08",
+      "name": "Filter Email Candidates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "email",
+        "operation": "send",
+        "fromEmail": "={{$env.SMTP_FROM}}",
+        "toEmail": "={{$env.RESPONSIBLE_EMAIL}}",
+        "subject": "=SERCOP/NCO {{ $json.tipo }} :: {{ $json.titulo }}",
+        "emailFormat": "html",
+        "html": "= <p><strong>Nueva necesidad NCO confirmada para HDM</strong></p><p><strong>Titulo:</strong> {{$json.titulo}}</p><p><strong>Entidad:</strong> {{$json.entidad}}</p><p><strong>Tipo:</strong> {{$json.tipo}}</p><p><strong>Score:</strong> {{$json.match_score}}</p><p><strong>Fecha limite:</strong> {{$json.fecha_limite || \"No visible\"}}</p><p><strong>URL:</strong> <a href=\"{{$json.url}}\">{{$json.url}}</a></p><p><strong>Keywords:</strong> {{ Array.isArray($json.keywords_hit) ? $json.keywords_hit.join(\", \") : $json.keywords_hit }}</p>"
+      },
+      "id": "e0fc2f9f-4f1d-4c14-9f68-9d298b2f7d09",
+      "name": "Email Responsible",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2340,
+        320
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "Sm7Ny4BcT2rVhP8q",
+          "name": "Local SMTP Mailpit"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Keyword Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Keyword Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Keyword Rules": {
+      "main": [
+        [
+          {
+            "node": "Fetch NCO List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch NCO List": {
+      "main": [
+        [
+          {
+            "node": "Normalize NCO List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize NCO List": {
+      "main": [
+        [
+          {
+            "node": "Fetch NCO Detail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch NCO Detail": {
+      "main": [
+        [
+          {
+            "node": "Score Filter Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Filter Prepare": {
+      "main": [
+        [
+          {
+            "node": "Upsert Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Opportunity": {
+      "main": [
+        [
+          {
+            "node": "Filter Email Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Email Candidates": {
+      "main": [
+        [
+          {
+            "node": "Email Responsible",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1e1c29e4-d4d8-4b8c-b28d-5c2b2614a102",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "active": true,
+  "tags": [],
+  "id": "1002"
+}

@@ -1,0 +1,12 @@
+keyword,family,weight,notes
+quimico,general,1.0,termino amplio
+reactivo,laboratorio,1.0,reactivos y kits
+solvente,laboratorio,1.0,insumos de laboratorio
+desinfectante,sanitizacion,1.0,limpieza y sanitizacion
+hipoclorito,sanitizacion,1.0,cloro e insumos afines
+detergente,sanitizacion,0.8,limpieza industrial
+acido,laboratorio,1.0,acidos tecnicos
+hidroxido,laboratorio,1.0,bases y neutralizantes
+etanol,solventes,1.0,alcoholes
+isopropanol,solventes,1.0,solventes y limpieza
+

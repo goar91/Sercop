@@ -1,0 +1,794 @@
+<div class="shell">
+  <header class="hero panel">
+    <div class="hero-copy">
+      <p class="eyebrow">CRM comercial + n8n + SERCOP</p>
+      <h1>HDM Procurement Cockpit</h1>
+      <p class="subtitle">
+        Monitorea procesos SERCOP, confirma invitaciones para <strong>{{ meta()?.invitedCompanyName || 'HDM' }}</strong>,
+        asigna vendedores por zona y revisa los workflows de n8n sin salir del CRM.
+      </p>
+    </div>
+
+    <div class="hero-actions">
+      <button type="button" class="ghost" (click)="reloadAll()">Actualizar datos</button>
+      <button type="button" class="primary" (click)="openN8n()">Abrir editor n8n</button>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <section class="banner error">{{ errorMessage() }}</section>
+  }
+
+  @if (successMessage()) {
+    <section class="banner success">{{ successMessage() }}</section>
+  }
+
+  @if (dashboard(); as dashboard) {
+    <section class="stats-grid">
+      <article class="stat-card panel accent">
+        <span>Total procesos</span>
+        <strong>{{ dashboard.totalOpportunities }}</strong>
+        <small>Base compartida con automatizaciones n8n.</small>
+      </article>
+
+      <article class="stat-card panel">
+        <span>Invitados HDM</span>
+        <strong>{{ dashboard.invitedOpportunities }}</strong>
+        <small>Filtro activo por invitacion a la empresa.</small>
+      </article>
+
+      <article class="stat-card panel">
+        <span>Asignados</span>
+        <strong>{{ dashboard.assignedOpportunities }}</strong>
+        <small>Casos con vendedor responsable.</small>
+      </article>
+
+      <article class="stat-card panel">
+        <span>Sin asignar</span>
+        <strong>{{ dashboard.unassignedOpportunities }}</strong>
+        <small>Procesos pendientes de reparto.</small>
+      </article>
+
+      <article class="stat-card panel">
+        <span>Zonas activas</span>
+        <strong>{{ dashboard.activeZones }}</strong>
+        <small>Configurables desde este mismo CRM.</small>
+      </article>
+
+      <article class="stat-card panel">
+        <span>Workflows n8n</span>
+        <strong>{{ dashboard.workflowCount }}</strong>
+        <small>Importados en la base local.</small>
+      </article>
+    </section>
+  }
+
+  <section class="workspace">
+    <aside class="panel sidebar">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Pipeline comercial</p>
+          <h2>Procesos</h2>
+        </div>
+        <span class="chip muted">{{ opportunities().length }} visibles</span>
+      </div>
+
+      <form class="filters" (ngSubmit)="applyFilters()">
+        <label>
+          <span>Buscar</span>
+          <input [(ngModel)]="filters.search" name="search" placeholder="titulo, entidad, codigo, OCID o NIC" />
+        </label>
+
+        <label>
+          <span>Estado</span>
+          <select [(ngModel)]="filters.estado" name="estado">
+            <option value="">Todos</option>
+            @for (status of statusOptions; track status) {
+              <option [value]="status">{{ status }}</option>
+            }
+          </select>
+        </label>
+
+        <label>
+          <span>Zona</span>
+          <select [(ngModel)]="filters.zoneId" name="zoneId">
+            <option value="">Todas</option>
+            @for (zone of zones(); track zone.id) {
+              <option [value]="zone.id">{{ zone.name }}</option>
+            }
+          </select>
+        </label>
+
+        <label>
+          <span>Vendedor</span>
+          <select [(ngModel)]="filters.assignedUserId" name="assignedUserId">
+            <option value="">Todos</option>
+            @for (user of users(); track user.id) {
+              <option [value]="user.id">{{ user.fullName }}</option>
+            }
+          </select>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" [(ngModel)]="filters.invitedOnly" name="invitedOnly" />
+          <span>Solo procesos invitados a HDM</span>
+        </label>
+
+        @if (!filters.invitedOnly) {
+          <div class="filter-hint full-width">
+            Se muestran todos los procesos capturados desde SERCOP. Activa este filtro solo si quieres ver procesos con invitacion HDM confirmada y guardada en la base.
+          </div>
+        }
+
+        <div class="filter-actions">
+          <button type="button" class="ghost" (click)="clearFilters()">Limpiar</button>
+          <button type="submit" class="primary">Aplicar filtros</button>
+        </div>
+      </form>
+
+      <div class="opportunity-list">
+        @if (loading()) {
+          <div class="empty-state small">Cargando procesos...</div>
+        } @else if (opportunities().length === 0) {
+          <div class="empty-state small">
+            <div>
+              <strong>No hay procesos que cumplan el filtro actual.</strong>
+              <p>Si mantienes activo el filtro de invitacion HDM, solo apareceran procesos con invitacion confirmada dentro del CRM.</p>
+            </div>
+          </div>
+        } @else {
+          @for (item of opportunities(); track item.id) {
+            <button
+              type="button"
+              class="opportunity-card"
+              [class.selected]="item.id === selectedOpportunityId()"
+              (click)="selectOpportunity(item.id)">
+              <div class="opportunity-topline">
+                <span class="chip source">{{ item.source }}</span>
+                <span class="chip" [class.good]="item.isInvitedMatch">{{ item.isInvitedMatch ? 'Invitado' : 'No confirmado' }}</span>
+              </div>
+
+              <h3>{{ item.titulo }}</h3>
+              <p>{{ item.entidad || 'Entidad no informada' }}</p>
+
+              <div class="opportunity-meta">
+                <span>{{ item.processCode || item.ocidOrNic }}</span>
+                <span>{{ item.estado || 'nuevo' }}</span>
+              </div>
+
+              <div class="opportunity-scores">
+                <div>
+                  <small>Match</small>
+                  <strong>{{ item.matchScore | number: '1.0-0' }}</strong>
+                </div>
+                <div>
+                  <small>IA</small>
+                  <strong>{{ item.aiScore | number: '1.0-0' }}</strong>
+                </div>
+                <div>
+                  <small>Zona</small>
+                  <strong>{{ item.zoneName || 'Pendiente' }}</strong>
+                </div>
+              </div>
+            </button>
+          }
+        }
+      </div>
+    </aside>
+
+    <main class="panel detail-panel">
+      @if (detailLoading()) {
+        <div class="empty-state">Cargando detalle del proceso...</div>
+      } @else if (selectedOpportunity(); as detail) {
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Ficha comercial</p>
+            <h2>{{ detail.titulo }}</h2>
+          </div>
+          <a class="primary link-button" [href]="detail.url" target="_blank" rel="noopener">Abrir proceso</a>
+        </div>
+
+        <section class="detail-grid compact">
+          <article class="info-card">
+            <span>Entidad</span>
+            <strong>{{ detail.entidad || 'No informada' }}</strong>
+          </article>
+          <article class="info-card">
+            <span>Codigo</span>
+            <strong>{{ detail.processCode || detail.ocidOrNic }}</strong>
+          </article>
+          <article class="info-card">
+            <span>Limite</span>
+            <strong>{{ detail.fechaLimite ? (detail.fechaLimite | date: 'dd/MM/yyyy HH:mm') : 'Sin fecha' }}</strong>
+          </article>
+          <article class="info-card">
+            <span>Monto</span>
+            <strong>{{ detail.montoRef ? (detail.montoRef | currency: detail.moneda) : 'No informado' }}</strong>
+          </article>
+          <article class="info-card">
+            <span>Recomendacion</span>
+            <strong>{{ detail.recomendacion || 'Pendiente de analisis' }}</strong>
+          </article>
+          <article class="info-card">
+            <span>Invitacion</span>
+            <strong>{{ detail.isInvitedMatch ? 'Confirmada para ' + (detail.invitedCompanyName || meta()?.invitedCompanyName || 'HDM') : 'Pendiente de confirmacion' }}</strong>
+          </article>
+        </section>
+
+        <section class="assignment-layout">
+          <article class="subpanel form-panel">
+            <div class="subpanel-header">
+              <h3>Asignacion comercial</h3>
+              <span class="chip muted">{{ detail.assignmentUpdatedAt ? ('Actualizado ' + (detail.assignmentUpdatedAt | date: 'dd/MM HH:mm')) : 'Sin historial reciente' }}</span>
+            </div>
+
+            <form class="form-grid" (ngSubmit)="saveAssignment()">
+              <label>
+                <span>Vendedor</span>
+                <select [(ngModel)]="assignmentForm.assignedUserId" name="assignedUserId">
+                  <option value="">Sin asignar</option>
+                  @for (user of users(); track user.id) {
+                    <option [value]="user.id">{{ user.fullName }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                <span>Zona</span>
+                <select [(ngModel)]="assignmentForm.zoneId" name="assignmentZoneId">
+                  <option value="">Sin zona</option>
+                  @for (zone of zones(); track zone.id) {
+                    <option [value]="zone.id">{{ zone.name }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                <span>Estado</span>
+                <select [(ngModel)]="assignmentForm.estado" name="assignmentEstado">
+                  @for (status of statusOptions; track status) {
+                    <option [value]="status">{{ status }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                <span>Prioridad</span>
+                <select [(ngModel)]="assignmentForm.priority" name="assignmentPriority">
+                  @for (priority of priorityOptions; track priority) {
+                    <option [value]="priority">{{ priority }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="full-width">
+                <span>Notas CRM</span>
+                <textarea [(ngModel)]="assignmentForm.notes" name="assignmentNotes" rows="4" placeholder="Contexto comercial, decision de participar, observaciones internas"></textarea>
+              </label>
+
+              <div class="form-actions full-width">
+                <button type="submit" class="primary" [disabled]="savingAssignment()">{{ savingAssignment() ? 'Guardando...' : 'Guardar asignacion' }}</button>
+              </div>
+            </form>
+          </article>
+
+          <article class="subpanel form-panel">
+            <div class="subpanel-header">
+              <h3>Invitacion HDM</h3>
+              <span class="chip" [class.good]="detail.isInvitedMatch">{{ detail.isInvitedMatch ? 'Confirmada' : 'No confirmada' }}</span>
+            </div>
+
+            <form class="form-grid" (ngSubmit)="saveInvitation()">
+              <label class="checkbox-row full-width">
+                <input type="checkbox" [(ngModel)]="invitationForm.isInvitedMatch" name="invitationIsInvited" />
+                <span>Confirmar que HDM fue invitada a este proceso</span>
+              </label>
+
+              <label>
+                <span>Fuente</span>
+                <input [(ngModel)]="invitationForm.invitationSource" name="invitationSource" [disabled]="!invitationForm.isInvitedMatch" placeholder="reporte_sercop, correo, validacion_manual" />
+              </label>
+
+              <label>
+                <span>URL evidencia</span>
+                <input [(ngModel)]="invitationForm.invitationEvidenceUrl" name="invitationEvidenceUrl" [disabled]="!invitationForm.isInvitedMatch" placeholder="URL del reporte o evidencia" />
+              </label>
+
+              <label class="full-width">
+                <span>Notas de validacion</span>
+                <textarea [(ngModel)]="invitationForm.invitationNotes" name="invitationNotes" rows="4" [disabled]="!invitationForm.isInvitedMatch" placeholder="Detalle de la evidencia o comentario de validacion"></textarea>
+              </label>
+
+              @if (detail.invitationVerifiedAt) {
+                <div class="filter-hint full-width">
+                  Invitacion verificada el {{ detail.invitationVerifiedAt | date: 'dd/MM/yyyy HH:mm' }}{{ detail.invitationSource ? (' desde ' + detail.invitationSource) : '' }}.
+                </div>
+              }
+
+              <div class="form-actions full-width">
+                <button type="submit" class="primary" [disabled]="savingInvitation()">{{ savingInvitation() ? 'Guardando...' : 'Guardar invitacion' }}</button>
+              </div>
+            </form>
+          </article>
+
+          <article class="subpanel history-panel">
+            <div class="subpanel-header">
+              <h3>Historial</h3>
+              <span class="chip muted">{{ detail.assignmentHistory.length }} eventos</span>
+            </div>
+
+            @if (detail.assignmentHistory.length === 0) {
+              <div class="empty-state small">Todavia no hay cambios registrados para este proceso.</div>
+            } @else {
+              <div class="history-list">
+                @for (event of detail.assignmentHistory; track event.id) {
+                  <div class="history-item">
+                    <strong>{{ event.assignedUserName || 'Sin vendedor' }}</strong>
+                    <span>{{ event.zoneName || 'Sin zona' }} ? {{ event.newStatus || 'sin estado' }}</span>
+                    <small>{{ event.changedAt | date: 'dd/MM/yyyy HH:mm' }}</small>
+                    <p>{{ event.notes || 'Sin notas' }}</p>
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        </section>        <section class="insights-grid">
+          <article class="subpanel wide">
+            <div class="subpanel-header">
+              <h3>Analisis IA</h3>
+              <span class="chip muted">{{ detail.aiResumen ? 'Disponible' : 'Pendiente' }}</span>
+            </div>
+            <p>{{ detail.aiResumen || 'Aun no existe analisis guardado para este proceso.' }}</p>
+            @if (detail.aiEstrategiaAbastecimiento) {
+              <div class="stack">
+                <strong>Estrategia de abastecimiento</strong>
+                <p>{{ detail.aiEstrategiaAbastecimiento }}</p>
+              </div>
+            }
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Riesgos</h3>
+            </div>
+            <pre>{{ formattedOpportunity()?.aiRiesgos }}</pre>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Checklist documental</h3>
+            </div>
+            <pre>{{ formattedOpportunity()?.aiChecklist }}</pre>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Cotizacion sugerida</h3>
+            </div>
+            <pre>{{ formattedOpportunity()?.aiListaCotizacion }}</pre>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Preguntas abiertas</h3>
+            </div>
+            <pre>{{ formattedOpportunity()?.aiPreguntasAbiertas }}</pre>
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Documentos fuente</h3>
+              <span class="chip muted">{{ detail.documents.length }} archivos</span>
+            </div>
+            @if (detail.documents.length === 0) {
+              <div class="empty-state small">No hay documentos descargados para este proceso.</div>
+            } @else {
+              <div class="document-list">
+                @for (document of detail.documents; track document.id) {
+                  <div class="document-item">
+                    <a [href]="document.sourceUrl" target="_blank" rel="noopener">{{ document.sourceUrl }}</a>
+                    <small>{{ document.chunkCount }} chunks</small>
+                  </div>
+                }
+              </div>
+            }
+          </article>
+
+          <article class="subpanel">
+            <div class="subpanel-header">
+              <h3>Payload crudo</h3>
+              <span class="chip muted">SERCOP / n8n</span>
+            </div>
+            <pre>{{ formattedOpportunity()?.rawPayload }}</pre>
+          </article>
+        </section>
+      } @else {
+        <div class="empty-state">Selecciona un proceso para ver su detalle, asignarlo y revisar el analisis.</div>
+      }
+    </main>
+  </section>
+
+  <section class="workspace secondary">
+    <section class="panel config-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Configuracion operacional</p>
+          <h2>Zonas, usuarios y canal operativo</h2>
+        </div>
+        <span class="chip muted">Base local PostgreSQL</span>
+      </div>
+
+      <div class="config-grid">
+        <article class="subpanel">
+          <div class="subpanel-header">
+            <h3>Canal operativo</h3>
+          </div>
+          <dl class="meta-list">
+            <div>
+              <dt>Almacenamiento</dt>
+              <dd>{{ meta()?.storageMode || 'PostgreSQL local + CRM' }}</dd>
+            </div>
+            <div>
+              <dt>Base activa</dt>
+              <dd>{{ meta()?.storageTarget || 'sercop_crm' }}</dd>
+            </div>
+            <div>
+              <dt>Responsable</dt>
+              <dd>{{ meta()?.responsibleEmail || 'Pendiente' }}</dd>
+            </div>
+            <div>
+              <dt>Editor n8n</dt>
+              <dd>{{ meta()?.n8nEditorUrl || 'Pendiente' }}</dd>
+            </div>
+          </dl>
+        </article>
+
+        <article class="subpanel">
+          <div class="subpanel-header">
+            <h3>Zonas comerciales</h3>
+          </div>
+
+          <form class="form-grid" (ngSubmit)="saveZone()">
+            <label>
+              <span>Nombre</span>
+              <input [(ngModel)]="zoneForm.name" name="zoneName" required />
+            </label>
+            <label>
+              <span>Codigo</span>
+              <input [(ngModel)]="zoneForm.code" name="zoneCode" maxlength="8" required />
+            </label>
+            <label class="full-width">
+              <span>Descripcion</span>
+              <textarea [(ngModel)]="zoneForm.description" name="zoneDescription" rows="3"></textarea>
+            </label>
+            <label class="checkbox-row full-width">
+              <input type="checkbox" [(ngModel)]="zoneForm.active" name="zoneActive" />
+              <span>Zona activa</span>
+            </label>
+            <div class="form-actions full-width">
+              <button type="button" class="ghost" (click)="resetZoneForm()">Nueva zona</button>
+              <button type="submit" class="primary" [disabled]="savingZone()">{{ savingZone() ? 'Guardando...' : (zoneForm.id ? 'Actualizar zona' : 'Crear zona') }}</button>
+            </div>
+          </form>
+
+          <div class="table-list">
+            @for (zone of zones(); track zone.id) {
+              <button type="button" class="table-row interactive" (click)="editZone(zone)">
+                <div>
+                  <strong>{{ zone.name }}</strong>
+                  <p>{{ zone.code }} ? {{ zone.description || 'Sin descripcion' }}</p>
+                </div>
+                <span class="chip" [class.good]="zone.active">{{ zone.active ? 'Activa' : 'Inactiva' }}</span>
+              </button>
+            }
+          </div>
+        </article>
+
+        <article class="subpanel wide">
+          <div class="subpanel-header">
+            <h3>Usuarios comerciales</h3>
+          </div>
+
+          <form class="form-grid" (ngSubmit)="saveUser()">
+            <label>
+              <span>Nombre completo</span>
+              <input [(ngModel)]="userForm.fullName" name="userFullName" required />
+            </label>
+            <label>
+              <span>Email</span>
+              <input [(ngModel)]="userForm.email" name="userEmail" type="email" required />
+            </label>
+            <label>
+              <span>Rol</span>
+              <select [(ngModel)]="userForm.role" name="userRole">
+                @for (role of roleOptions; track role) {
+                  <option [value]="role">{{ role }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Zona</span>
+              <select [(ngModel)]="userForm.zoneId" name="userZoneId">
+                <option value="">Sin zona</option>
+                @for (zone of zones(); track zone.id) {
+                  <option [value]="zone.id">{{ zone.name }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Telefono</span>
+              <input [(ngModel)]="userForm.phone" name="userPhone" />
+            </label>
+            <label class="checkbox-row">
+              <input type="checkbox" [(ngModel)]="userForm.active" name="userActive" />
+              <span>Usuario activo</span>
+            </label>
+            <div class="form-actions full-width">
+              <button type="button" class="ghost" (click)="resetUserForm()">Nuevo usuario</button>
+              <button type="submit" class="primary" [disabled]="savingUser()">{{ savingUser() ? 'Guardando...' : (userForm.id ? 'Actualizar usuario' : 'Crear usuario') }}</button>
+            </div>
+          </form>
+
+          <div class="table-list">
+            @for (user of users(); track user.id) {
+              <button type="button" class="table-row interactive" (click)="editUser(user)">
+                <div>
+                  <strong>{{ user.fullName }}</strong>
+                  <p>{{ user.email }} ? {{ user.zoneName || 'Sin zona' }}</p>
+                </div>
+                <span class="chip" [class.good]="user.active">{{ user.role }}</span>
+              </button>
+            }
+          </div>
+        </article>
+
+        <article class="subpanel wide">
+          <div class="subpanel-header">
+            <div>
+              <h3>Importar invitaciones HDM</h3>
+              <p>Sincroniza primero el reporte publico oficial de invitaciones de SERCOP y, si hace falta, complementa con codigos manuales desde tu registro interno.</p>
+            </div>
+            <div class="stack">
+              <span class="chip muted">{{ invitationImportResult()?.confirmedCount ?? 0 }} confirmados manualmente</span>
+              <button type="button" class="ghost" (click)="syncInvitations()" [disabled]="syncingInvitations()">
+                {{ syncingInvitations() ? 'Sincronizando reporte...' : 'Sincronizar reporte publico' }}
+              </button>
+            </div>
+          </div>
+
+          <form class="form-grid" (ngSubmit)="importInvitations()">
+            <label>
+              <span>Fuente</span>
+              <input [(ngModel)]="invitationImportForm.invitationSource" name="invitationImportSource" placeholder="reporte_sercop" />
+            </label>
+
+            <label>
+              <span>URL evidencia</span>
+              <input [(ngModel)]="invitationImportForm.invitationEvidenceUrl" name="invitationImportEvidenceUrl" placeholder="URL del reporte o soporte" />
+            </label>
+
+            <label class="full-width">
+              <span>Codigos de procesos</span>
+              <textarea [(ngModel)]="invitationImportForm.codesText" name="invitationImportCodes" rows="6" required placeholder="Un codigo por linea. Ejemplos:&#10;SIE-HSLO-2026-03-2580&#10;NIC-1160004660001-2026-00065"></textarea>
+            </label>
+
+            <label class="full-width">
+              <span>Notas</span>
+              <textarea [(ngModel)]="invitationImportForm.invitationNotes" name="invitationImportNotes" rows="3" placeholder="Observaciones de la importacion"></textarea>
+            </label>
+
+            <div class="form-actions full-width">
+              <button type="submit" class="primary" [disabled]="importingInvitations()">{{ importingInvitations() ? 'Importando...' : 'Importar invitaciones' }}</button>
+            </div>
+          </form>
+
+          @if (invitationImportResult(); as result) {
+            <div class="stack">
+              <div class="filter-hint">
+                {{ result.confirmedCount }} de {{ result.requestedCount }} codigos quedaron confirmados.
+              </div>
+              @if (result.unmatchedCodes.length > 0) {
+                <pre>{{ result.unmatchedCodes | json }}</pre>
+              }
+            </div>
+          }
+
+          @if (invitationSyncResult(); as result) {
+            <div class="stack">
+              <div class="filter-hint">
+                Reporte publico revisado: {{ result.confirmedCount }} confirmados de {{ result.scannedCount }} procesos escaneados.
+              </div>
+              @if (result.errors.length > 0) {
+                <pre>{{ result.errors | json }}</pre>
+              }
+            </div>
+          }
+        </article>
+
+        <article class="subpanel wide">
+          <div class="subpanel-header">
+            <div>
+              <h3>Palabras clave</h3>
+              <p>Fuente unica para filtros OCDS y NCO. Cada cambio aplica en la siguiente ejecucion del workflow.</p>
+            </div>
+            <span class="chip muted">{{ filteredKeywordRules().length }} / {{ keywordRules().length }} reglas</span>
+          </div>
+
+          <form class="form-grid" (ngSubmit)="saveKeyword()">
+            <label>
+              <span>Tipo</span>
+              <select [(ngModel)]="keywordForm.ruleType" name="keywordRuleType">
+                @for (type of keywordRuleTypeOptions; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Alcance</span>
+              <select [(ngModel)]="keywordForm.scope" name="keywordScope">
+                @for (scope of keywordScopeOptions; track scope) {
+                  <option [value]="scope">{{ scope }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Palabra clave</span>
+              <input [(ngModel)]="keywordForm.keyword" name="keywordValue" required placeholder="reactivo, hipoclorito, solvente" />
+            </label>
+
+            <label>
+              <span>Familia</span>
+              <input [(ngModel)]="keywordForm.family" name="keywordFamily" placeholder="laboratorio, sanitizacion" />
+            </label>
+
+            <label>
+              <span>Peso</span>
+              <input [(ngModel)]="keywordForm.weight" name="keywordWeight" type="number" min="0.1" step="0.1" required />
+            </label>
+
+            <label class="checkbox-row">
+              <input type="checkbox" [(ngModel)]="keywordForm.active" name="keywordActive" />
+              <span>Regla activa</span>
+            </label>
+
+            <label class="full-width">
+              <span>Notas</span>
+              <textarea [(ngModel)]="keywordForm.notes" name="keywordNotes" rows="3" placeholder="Uso comercial, excepciones o contexto"></textarea>
+            </label>
+
+            <div class="form-actions full-width">
+              <button type="button" class="ghost" (click)="resetKeywordForm()">Nueva regla</button>
+              <button type="submit" class="primary" [disabled]="savingKeyword()">{{ savingKeyword() ? 'Guardando...' : (keywordForm.id ? 'Actualizar regla' : 'Crear regla') }}</button>
+            </div>
+          </form>
+
+          <div class="inline-filters keyword-filters">
+            <label>
+              <span>Buscar</span>
+              <input [(ngModel)]="keywordListFilters.search" name="keywordSearch" placeholder="reactivo, laboratorio, sanitizacion" />
+            </label>
+
+            <label>
+              <span>Tipo</span>
+              <select [(ngModel)]="keywordListFilters.ruleType" name="keywordListRuleType">
+                <option value="">Todos</option>
+                @for (type of keywordRuleTypeOptions; track type) {
+                  <option [value]="type">{{ type }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Alcance</span>
+              <select [(ngModel)]="keywordListFilters.scope" name="keywordListScope">
+                <option value="">Todos</option>
+                @for (scope of keywordScopeOptions; track scope) {
+                  <option [value]="scope">{{ scope }}</option>
+                }
+              </select>
+            </label>
+
+            <label>
+              <span>Estado</span>
+              <select [(ngModel)]="keywordListFilters.status" name="keywordListStatus">
+                <option value="all">Todos</option>
+                <option value="active">Activas</option>
+                <option value="inactive">Inactivas</option>
+              </select>
+            </label>
+
+            <div class="filter-actions">
+              <button type="button" class="ghost" (click)="clearKeywordListFilters()">Limpiar lista</button>
+            </div>
+          </div>
+
+          <div class="table-list">
+            @if (filteredKeywordRules().length === 0) {
+              <div class="empty-state small">
+                <div>
+                  <strong>No hay reglas para el filtro actual.</strong>
+                  <p>Ajusta la busqueda o crea una nueva palabra clave desde este mismo modulo.</p>
+                </div>
+              </div>
+            } @else {
+              @for (rule of filteredKeywordRules(); track rule.id) {
+              <button type="button" class="table-row interactive keyword-row" (click)="editKeyword(rule)">
+                <div>
+                  <strong>{{ rule.keyword }}</strong>
+                  <p>{{ rule.family || 'Sin familia' }} · peso {{ rule.weight | number: '1.0-1' }} · actualizado {{ rule.updatedAt | date: 'dd/MM HH:mm' }}</p>
+                  <small>{{ rule.notes || 'Sin notas' }}</small>
+                </div>
+                <div class="keyword-chips">
+                  <span class="chip" [class.good]="rule.ruleType === 'include'">{{ rule.ruleType }}</span>
+                  <span class="chip muted">{{ rule.scope }}</span>
+                  <span class="chip" [class.good]="rule.active">{{ rule.active ? 'Activa' : 'Inactiva' }}</span>
+                </div>
+              </button>
+              }
+            }
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel workflow-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Workflows cargados</p>
+          <h2>Visor de nodos n8n</h2>
+        </div>
+        <span class="chip muted">{{ workflowSummaries().length }} workflows</span>
+      </div>
+
+      <div class="workflow-layout">
+        <div class="workflow-list">
+          @for (workflow of workflowSummaries(); track workflow.id) {
+            <button
+              type="button"
+              class="workflow-item"
+              [class.selected]="workflow.id === selectedWorkflowId()"
+              (click)="selectWorkflow(workflow.id)">
+              <div>
+                <strong>{{ workflow.name }}</strong>
+                <p>{{ workflow.nodeCount }} nodos ? actualizado {{ workflow.updatedAt | date: 'dd/MM HH:mm' }}</p>
+              </div>
+              <span class="chip" [class.good]="workflow.active">{{ workflow.active ? 'Activo' : 'Inactivo' }}</span>
+            </button>
+          }
+        </div>
+
+        <div class="workflow-canvas-wrapper">
+          @if (workflowLoading()) {
+            <div class="empty-state">Cargando workflow seleccionado...</div>
+          } @else if (selectedWorkflow(); as workflow) {
+            <div class="workflow-meta">
+              <div>
+                <h3>{{ workflow.name }}</h3>
+                <p>{{ workflow.description || 'Workflow importado en la base local de n8n.' }}</p>
+              </div>
+              <span class="chip source">{{ workflow.nodeCount }} nodos</span>
+            </div>
+
+            <div class="workflow-canvas-shell">
+              <div class="workflow-canvas" [style.width]="workflowLayout().width" [style.height]="workflowLayout().height">
+                @for (node of workflow.nodes; track node.id) {
+                  <article class="workflow-node" [style.left]="workflowLayout().nodeStyles[node.id].left" [style.top]="workflowLayout().nodeStyles[node.id].top" [class.disabled]="node.disabled">
+                    <small>{{ node.type.replace('n8n-nodes-base.', '') }}</small>
+                    <strong>{{ node.name }}</strong>
+                  </article>
+                }
+              </div>
+            </div>
+          } @else {
+            <div class="empty-state">No hay workflows para mostrar.</div>
+          }
+        </div>
+      </div>
+    </section>
+  </section>
+</div>
+
+
+

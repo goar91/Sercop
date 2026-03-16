@@ -1,0 +1,111 @@
+{
+  "name": "03 SERCOP Manual Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "analysis/sercop",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f0fc2f9f-4f1d-4c14-9f68-9d298b2f7d01",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        260,
+        300
+      ],
+      "webhookId": "analysis-sercop"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nreturn [{ json: { original: body } }];"
+      },
+      "id": "f0fc2f9f-4f1d-4c14-9f68-9d298b2f7d02",
+      "name": "Build Analysis Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.original || $json.body || $json;\nconst text = `${body.title || body.titulo || ''} ${body.entidad || ''} ${body.tipo || ''} ${body.description || body.descripcion || ''} ${body.excerpt || body.extracto || ''}`.toLowerCase();\nconst chemicalRules = ['reactivo', 'quimico', 'quimico', 'laboratorio', 'desinfectante', 'hipoclorito', 'etanol', 'isopropanol', 'solvente', 'analisis clinico'];\nconst purchaseRules = ['subasta', 'infima', 'ínfima', 'proforma', 'contratacion', 'contratación'];\nconst hits = [...new Set(chemicalRules.filter((token) => text.includes(token)))];\nconst purchaseHits = [...new Set(purchaseRules.filter((token) => text.includes(token)))];\nconst tipo = String(body.tipo || 'Sin tipo');\nlet encaje = Math.min(100, hits.length * 16 + purchaseHits.length * 10 + (/subasta|infima|ínfima/i.test(tipo) ? 20 : 5));\nlet recomendacion = encaje >= 70 ? 'participar' : encaje >= 45 ? 'revisar' : 'no_participar';\nconst riesgos = [];\nif (!body.url) riesgos.push('No se proporciono la URL oficial del proceso para validar el pliego.');\nif (!body.excerpt && !body.extracto) riesgos.push('No se adjunto extracto documental para revisar requisitos tecnicos.');\nif (!hits.length) riesgos.push('El match tecnico con quimica es debil y requiere validacion manual.');\nconst checklist = [\n  'Validar ficha y pliego oficial en SERCOP.',\n  'Confirmar fecha limite, forma de entrega y vigencia de oferta.',\n  'Verificar especificaciones tecnicas y presentaciones requeridas.',\n  'Confirmar stock, tiempos de importacion o abastecimiento y certificados.',\n  'Preparar cotizacion y documentos habilitantes del proveedor.'\n];\nconst lista = hits.length ? hits.map((hit) => `Cotizar linea relacionada con ${hit}.`) : ['Solicitar cotizacion base y confirmar si el requerimiento realmente pertenece a la linea quimica.'];\nconst preguntas = [];\nif (!body.entidad) preguntas.push('Cual es la entidad contratante exacta?');\nif (!body.url) preguntas.push('Cual es la URL oficial del proceso en SERCOP?');\nif (!body.excerpt && !body.extracto) preguntas.push('Que requisitos documentales o tecnicos aparecen en el pliego?');\nconst estrategia = hits.length\n  ? `Priorizar cotizacion rapida para ${hits.join(', ')} y confirmar equivalencias tecnicas antes de ofertar.`\n  : 'Levantar mas informacion tecnica antes de decidir si se participa.';\nreturn [{\n  json: {\n    ok: true,\n    mode: 'rules_fallback',\n    analysis: {\n      resumen_ejecutivo: `Proceso ${recomendacion} con encaje estimado ${encaje}/100. Coincidencias detectadas: ${hits.join(', ') || 'sin coincidencias claras'}.`,\n      recomendacion,\n      encaje,\n      riesgos,\n      checklist_documental: checklist,\n      estrategia_abastecimiento: estrategia,\n      lista_cotizacion_sugerida: lista,\n      preguntas_abiertas: preguntas\n    }\n  }\n}];"
+      },
+      "id": "f0fc2f9f-4f1d-4c14-9f68-9d298b2f7d04",
+      "name": "Parse Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "f0fc2f9f-4f1d-4c14-9f68-9d298b2f7d05",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Analysis Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Analysis Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Analysis": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9d0de617-f66c-4c8a-a427-9db6aa5f0103",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "active": false,
+  "tags": [],
+  "id": "1003"
+}
