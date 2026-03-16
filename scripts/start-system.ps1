@@ -15,6 +15,23 @@ $envFile = Join-Path $root '.env'
 $frontendIndex = Join-Path $root 'frontend\dist\frontend\browser\index.html'
 $backendDll = Join-Path $root 'backend\bin\Debug\net10.0\backend.dll'
 
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Get-PrimaryNetworkCategory {
+    try {
+        return Get-NetConnectionProfile |
+            Where-Object { $_.IPv4Connectivity -eq 'Internet' } |
+            Select-Object -ExpandProperty NetworkCategory -First 1
+    }
+    catch {
+        return $null
+    }
+}
+
 function Resolve-PublicBaseIp {
     param([hashtable]$Config)
 
@@ -36,9 +53,7 @@ function Ensure-FirewallRule {
         [int]$Port
     )
 
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    if (-not (Test-IsAdministrator)) {
         return
     }
 
@@ -424,10 +439,17 @@ try {
     $config = Read-EnvFile -Path $envFile
     Export-EnvConfig -Config $config
     $publicBaseIp = Resolve-PublicBaseIp -Config $config
+    $crmExternalAccessMode = Get-CrmExternalAccessMode -Config $config
+    $isAdministrator = Test-IsAdministrator
+    $primaryNetworkCategory = Get-PrimaryNetworkCategory
     $n8nPort = if ($config.ContainsKey('N8N_PORT') -and $config['N8N_PORT']) { $config['N8N_PORT'] } else { '5678' }
     $mailpitUiPort = '8025'
     $mailpitSmtpPort = '1025'
     $crmExternalUrlFile = Join-Path $runDir 'crm-external-url.txt'
+
+    if ($crmExternalAccessMode -eq 'public_ip_or_ngrok' -and -not $isAdministrator -and $primaryNetworkCategory -eq 'Public') {
+        Write-Warning 'La red activa esta en perfil Public y esta consola no tiene permisos de administrador. El CRM puede escuchar en 0.0.0.0:5050, pero Windows probablemente bloquee acceso entrante por IP publica.'
+    }
 
     $env:N8N_HOST = $publicBaseIp
     $env:WEBHOOK_URL = "http://$publicBaseIp`:$n8nPort/"
