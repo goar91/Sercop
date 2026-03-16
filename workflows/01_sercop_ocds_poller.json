@@ -54,7 +54,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rules = $items('Load Keyword Rules').map((item) => item.json);\nconst uniqueRules = [];\nconst seen = new Set();\nconst ignoredKeywords = new Set(['acido', 'base', 'quimico']);\nconst maxSearchTerms = Number($env.OCDS_MAX_SEARCH_TERMS || 8);\n\nfor (const rule of rules) {\n  if (String(rule.rule_type || '') !== 'include') {\n    continue;\n  }\n\n  const keyword = String(rule.keyword || '').trim().toLowerCase();\n  if (!keyword || seen.has(keyword) || ignoredKeywords.has(keyword)) {\n    continue;\n  }\n\n  seen.add(keyword);\n  uniqueRules.push({\n    json: {\n      searchKeyword: keyword,\n      family: rule.family || '',\n      weight: Number(rule.weight || 1) || 1,\n    },\n  });\n}\n\nreturn uniqueRules.slice(0, maxSearchTerms);"
+        "jsCode": "const rules = $items('Load Keyword Rules').map((item) => item.json);\nconst ignoredKeywords = new Set(['acido', 'base', 'quimico']);\nconst familyBundles = {\n  sanitizacion: ['hipoclorito desinfectante'],\n  solventes: ['etanol solvente'],\n};\nconst keywordPriority = {\n  reactivo: 100,\n  'equipos de laboratorio': 99,\n  'insumos de laboratorio': 98,\n  'material de laboratorio': 97,\n  hipoclorito: 95,\n  desinfectante: 90,\n  laboratorio: 85,\n  etanol: 80,\n  solvente: 75,\n  hidroxido: 70,\n  detergente: 65,\n  isopropanol: 60,\n};\nconst maxSearchTerms = Math.max(6, Math.min(Number($env.OCDS_MAX_SEARCH_TERMS || 12), 16));\nconst lookbackDays = Math.max(0, Math.min(Number($env.PROCESS_PUBLICATION_LOOKBACK_DAYS ?? $env.OCDS_PUBLIC_LOOKBACK_DAYS ?? 0), 180));\n\nfunction formatLocalDate(value) {\n  const year = value.getFullYear();\n  const month = String(value.getMonth() + 1).padStart(2, '0');\n  const day = String(value.getDate()).padStart(2, '0');\n  return year + '-' + month + '-' + day;\n}\n\nconst today = new Date();\nconst todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());\nconst dateTo = formatLocalDate(todayStart);\nconst dateFrom = formatLocalDate(new Date(todayStart.getTime() - lookbackDays * 24 * 60 * 60 * 1000));\nconst includeRules = rules\n  .filter((rule) => String(rule.rule_type || '') === 'include')\n  .map((rule) => ({\n    keyword: String(rule.keyword || '').trim().toLowerCase(),\n    family: String(rule.family || '').trim().toLowerCase(),\n    weight: Number(rule.weight || 1) || 1,\n  }))\n  .filter((rule) => rule.keyword && !ignoredKeywords.has(rule.keyword))\n  .sort((left, right) =>\n    (keywordPriority[right.keyword] || 0) - (keywordPriority[left.keyword] || 0) ||\n    right.weight - left.weight ||\n    left.keyword.localeCompare(right.keyword));\nconst groupedByFamily = new Map();\nconst seen = new Set();\nconst out = [];\n\nfunction pushQuery(searchQuery, family, seedKeywords, weight) {\n  const normalized = String(searchQuery || '').trim().toLowerCase().replace(/\\s+/g, ' ');\n  if (!normalized || seen.has(normalized)) {\n    return;\n  }\n\n  seen.add(normalized);\n  out.push({\n    json: {\n      searchKeyword: Array.isArray(seedKeywords) && seedKeywords.length > 0 ? seedKeywords[0] : normalized,\n      searchQuery: normalized,\n      family: family || '',\n      seedKeywords: Array.isArray(seedKeywords) && seedKeywords.length > 0 ? seedKeywords : [normalized],\n      weight: Number(weight || 1) || 1,\n      dateFrom,\n      dateTo,\n    },\n  });\n}\n\nfor (const rule of includeRules) {\n  if (!rule.family) {\n    continue;\n  }\n\n  const familyRules = groupedByFamily.get(rule.family) || [];\n  familyRules.push(rule);\n  groupedByFamily.set(rule.family, familyRules);\n}\n\nfor (const [family, familyRules] of groupedByFamily.entries()) {\n  const prioritizedRules = familyRules\n    .slice()\n    .sort((left, right) =>\n      (keywordPriority[right.keyword] || 0) - (keywordPriority[left.keyword] || 0) ||\n      right.keyword.split(/\\s+/).length - left.keyword.split(/\\s+/).length ||\n      right.weight - left.weight ||\n      left.keyword.localeCompare(right.keyword));\n  const topKeywords = prioritizedRules\n    .map((rule) => rule.keyword)\n    .filter((keyword, index, keywords) => keywords.indexOf(keyword) === index)\n    .slice(0, 4);\n\n  if (topKeywords.length === 0) {\n    continue;\n  }\n\n  const exactPhrases = prioritizedRules\n    .filter((rule) => rule.keyword.includes(' '))\n    .slice(0, 2);\n  for (const phraseRule of exactPhrases) {\n    pushQuery(phraseRule.keyword, family, [phraseRule.keyword], phraseRule.weight);\n  }\n\n  const bundledQueries = familyBundles[family] || [];\n  if (bundledQueries.length > 0) {\n    for (const bundledQuery of bundledQueries) {\n      pushQuery(bundledQuery, family, topKeywords.slice(0, 2), prioritizedRules[0]?.weight || 1);\n    }\n  } else if (topKeywords.length > 1) {\n    pushQuery(topKeywords.slice(0, 2).join(' '), family, topKeywords.slice(0, 2), prioritizedRules[0]?.weight || 1);\n  }\n}\n\npushQuery('laboratorio', 'laboratorio', ['reactivo'], 1);\n\nfor (const rule of includeRules) {\n  pushQuery(rule.keyword, rule.family, [rule.keyword], rule.weight);\n}\n\nreturn out.slice(0, maxSearchTerms);"
       },
       "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d03",
       "name": "Seed Search Terms",
@@ -67,44 +67,173 @@
     },
     {
       "parameters": {
-        "url": "={{ 'https://datosabiertos.compraspublicas.gob.ec/PLATAFORMA/api/search_ocds?year=' + encodeURIComponent($env.OCDS_YEAR || String(new Date().getFullYear())) + '&search=' + encodeURIComponent($json.searchKeyword) + '&page=1' }}",
-        "options": {
-          "timeout": 45000
-        }
+        "jsCode": "const maxPages = Math.max(1, Math.min(Number($env.OCDS_PUBLIC_MAX_PAGES || 2), 4));\nconst out = [];\n\nfor (const item of $input.all()) {\n  for (let page = 0; page < maxPages; page++) {\n    out.push({\n      json: {\n        ...item.json,\n        page,\n        offset: page * 20,\n      },\n    });\n  }\n}\n\nreturn out;"
       },
       "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d04",
-      "name": "Fetch OCDS Search",
+      "name": "Prepare Public Search Pages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/servicio/interfazWeb.php",
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "text/html"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "__class",
+              "value": "SolicitudCompra"
+            },
+            {
+              "name": "__action",
+              "value": "buscarProcesoxEntidad"
+            },
+            {
+              "name": "txtPalabrasClaves",
+              "value": "={{$json.searchQuery}}"
+            },
+            {
+              "name": "txtEntidadContratante",
+              "value": ""
+            },
+            {
+              "name": "cmbEntidad",
+              "value": ""
+            },
+            {
+              "name": "txtCodigoTipoCompra",
+              "value": ""
+            },
+            {
+              "name": "txtCodigoProceso",
+              "value": ""
+            },
+            {
+              "name": "f_inicio",
+              "value": "={{$json.dateFrom}}"
+            },
+            {
+              "name": "f_fin",
+              "value": "={{$json.dateTo}}"
+            },
+            {
+              "name": "image",
+              "value": ""
+            },
+            {
+              "name": "captccc2",
+              "value": "2"
+            },
+            {
+              "name": "paginaActual",
+              "value": "={{String($json.offset || 0)}}"
+            },
+            {
+              "name": "estado",
+              "value": ""
+            },
+            {
+              "name": "trx",
+              "value": ""
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d05",
+      "name": "Fetch OCDS Public Search",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1040,
+        1300,
         320
       ],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const threshold = Number($env.MATCH_THRESHOLD || 60);\nconst rules = $items('Load Keyword Rules').map((item) => item.json);\nconst includeRules = rules.filter((rule) => String(rule.rule_type || '') === 'include');\nconst excludeRules = rules.filter((rule) => String(rule.rule_type || '') === 'exclude');\nconst candidates = new Map();\n\nfunction extractProcessCode(ocid) {\n  const raw = String(ocid || '').replace(/^ocds-[^-]+-/i, '').trim();\n  return /-d{3,}$/.test(raw) ? raw.replace(/-d{3,}$/, '') : raw;\n}\n\nfunction asArray(payload) {\n  if (Array.isArray(payload)) {\n    return payload;\n  }\n\n  if (Array.isArray(payload?.data)) {\n    return payload.data;\n  }\n\n  if (Array.isArray(payload?.records)) {\n    return payload.records;\n  }\n\n  return [];\n}\n\nfunction pick(record, keys) {\n  for (const key of keys) {\n    const value = record?.[key];\n    if (value !== undefined && value !== null && value !== '') {\n      return value;\n    }\n  }\n\n  return '';\n}\n\nfunction asNumber(value) {\n  const normalized = String(value ?? '').replace(/,/g, '');\n  const parsed = Number(normalized);\n  return Number.isFinite(parsed) ? parsed : null;\n}\n\nfunction normalizeText(value) {\n  return String(value ?? '').toLowerCase();\n}\n\nfunction uniqueHits(rawHits) {\n  const deduped = new Map();\n\n  for (const hit of rawHits) {\n    const keyword = String(hit.keyword || '').trim().toLowerCase();\n    if (!keyword || deduped.has(keyword)) {\n      continue;\n    }\n\n    deduped.set(keyword, {\n      keyword,\n      weight: Number(hit.weight || 1) || 1,\n    });\n  }\n\n  return Array.from(deduped.values());\n}\n\nfunction typeScore(processType) {\n  const normalized = String(processType || '').trim();\n  if (/cat[aá]logo/i.test(normalized)) {\n    return 0;\n  }\n\n  if (/subasta inversa/i.test(normalized)) {\n    return 25;\n  }\n\n  if (/infima|ínfima|necesidad/i.test(normalized)) {\n    return 20;\n  }\n\n  return normalized ? 15 : 10;\n}\n\nfunction parseDateScore(value) {\n  const timestamp = Date.parse(String(value || ''));\n  return Number.isFinite(timestamp) ? timestamp : 0;\n}\n\nconst inputs = $input.all();\nfor (let index = 0; index < inputs.length; index++) {\n  const payload = inputs[index].json;\n  const searchKeyword = String($item(index).$node['Seed Search Terms'].json.searchKeyword || '').trim().toLowerCase();\n\n  for (const row of asArray(payload)) {\n    const ocid = String(pick(row, ['ocid', 'id', 'code']) || '').trim();\n    if (!ocid) {\n      continue;\n    }\n\n    const title = String(pick(row, ['description', 'title', 'ocid']) || 'Sin titulo').trim();\n    const entity = String(pick(row, ['buyer', 'buyer_name', 'entity', 'procuringEntity']) || 'Sin entidad').trim();\n    const processType = String(pick(row, ['internal_type', 'procurementMethodDetails', 'tipo']) || 'Sin tipo').trim();\n    const publishedAt = String(pick(row, ['date', 'publishedDate', 'releaseDate']) || '').trim();\n    const deadlineAt = String(pick(row, ['tender_tenderPeriod_endDate', 'tenderPeriod_endDate', 'deadline']) || '').trim();\n    const amount = asNumber(pick(row, ['amount', 'budget', 'value_amount']));\n    const detailUrl = 'https://datosabiertos.compraspublicas.gob.ec/PLATAFORMA/api/record?ocid=' + encodeURIComponent(ocid);\n    const processCode = extractProcessCode(ocid) || ocid;\n    const haystack = normalizeText([title, entity, processType, searchKeyword].join(' '));\n    const seededHits = searchKeyword ? [{ keyword: searchKeyword, weight: 1 }] : [];\n    const includeHits = uniqueHits(\n      includeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())).concat(seededHits),\n    );\n    const excludeHits = uniqueHits(\n      excludeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())),\n    );\n    const includeWeight = includeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n    const excludeWeight = excludeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n    const taxonomyScore = Math.max(0, Math.min(60, Math.round(includeWeight * 25) - Math.round(excludeWeight * 25)));\n    const heuristicScore = includeHits.length > 0 ? 15 : 0;\n    const previewScore = Math.max(0, Math.min(100, taxonomyScore + typeScore(processType) + heuristicScore));\n\n    if (previewScore < threshold) {\n      continue;\n    }\n\n    const current = candidates.get(ocid) || {\n      source: 'ocds',\n      external_id: ocid,\n      ocid_or_nic: ocid,\n      process_code: processCode,\n      titulo: title,\n      entidad: entity,\n      tipo: processType,\n      fecha_publicacion: publishedAt,\n      fecha_limite: deadlineAt,\n      monto_ref: amount,\n      url: detailUrl,\n      initial_keywords: [],\n      candidate_payload: row,\n      preview_score: previewScore,\n    };\n\n    if (searchKeyword && !current.initial_keywords.includes(searchKeyword)) {\n      current.initial_keywords.push(searchKeyword);\n    }\n\n    current.preview_score = Math.max(current.preview_score || 0, previewScore);\n\n    if (!current.fecha_publicacion) {\n      current.fecha_publicacion = publishedAt;\n    }\n\n    if (!current.fecha_limite) {\n      current.fecha_limite = deadlineAt;\n    }\n\n    if (current.monto_ref === null && amount !== null) {\n      current.monto_ref = amount;\n    }\n\n    candidates.set(ocid, current);\n  }\n}\n\nreturn Array.from(candidates.values())\n  .sort((left, right) => {\n    if ((right.preview_score || 0) !== (left.preview_score || 0)) {\n      return (right.preview_score || 0) - (left.preview_score || 0);\n    }\n\n    return parseDateScore(right.fecha_publicacion) - parseDateScore(left.fecha_publicacion);\n  })\n  .slice(0, 25)\n  .map((candidate) => ({ json: candidate }));"
+        "jsCode": "const threshold = Number($env.MATCH_THRESHOLD || 60);\nconst rules = $items('Load Keyword Rules').map((item) => item.json);\nconst includeRules = rules.filter((rule) => String(rule.rule_type || '') === 'include');\nconst excludeRules = rules.filter((rule) => String(rule.rule_type || '') === 'exclude');\nconst candidates = new Map();\nconst maxCandidates = Math.max(10, Math.min(Number($env.OCDS_PUBLIC_MAX_CANDIDATES || 30), 60));\nconst includeClosed = String($env.OCDS_INCLUDE_CLOSED || 'false').toLowerCase() === 'true';\nconst publicationLookbackDays = Math.max(0, Math.min(Number($env.PROCESS_PUBLICATION_LOOKBACK_DAYS ?? $env.OCDS_PUBLIC_LOOKBACK_DAYS ?? 0), 180));\nconst typeLabels = {\n  '386': 'Subasta Inversa Electrónica',\n  '387': 'Licitación',\n  '451': 'Publicación',\n  '4205': 'Capacidad nacional',\n  '4207': 'Producción Nacional',\n  '4209': 'Precalificación',\n  '4213': 'Contratación directa',\n  '4216': 'Lista corta',\n  '4217': 'Concurso público',\n  '4245': 'Cotización',\n  '4246': 'Menor Cuantía',\n  '4504': 'Subasta Inversa Corporativa',\n  '4505': 'Convenio Marco',\n  '4506': 'Ferias Inclusivas',\n  '4600': 'Lista Corta por Contratación Directa Desierta',\n  '4601': 'Concurso Público por Contratación Directa Desierta',\n  '4602': 'Concurso Público por Lista Corta Desierta',\n  '4603': 'Contratación Directa por Terminación Unilateral',\n};\n\nfunction parseXJson(rawHeader) {\n  const raw = String(rawHeader || '').trim();\n  if (!raw || raw === '([])' || raw === '({})') {\n    return [];\n  }\n\n  const payload = raw.startsWith('(') && raw.endsWith(')') ? raw.slice(1, -1) : raw;\n  if (!payload) {\n    return [];\n  }\n\n  try {\n    const parsed = JSON.parse(payload);\n    return Array.isArray(parsed) ? parsed : [];\n  } catch {\n    return [];\n  }\n}\n\nfunction normalizeText(value) {\n  return String(value ?? '')\n    .toLowerCase()\n    .replace(/[áàäâ]/g, 'a')\n    .replace(/[éèëê]/g, 'e')\n    .replace(/[íìïî]/g, 'i')\n    .replace(/[óòöô]/g, 'o')\n    .replace(/[úùüû]/g, 'u')\n    .replace(/ñ/g, 'n');\n}\n\nfunction uniqueHits(rawHits) {\n  const deduped = new Map();\n\n  for (const hit of rawHits) {\n    const keyword = String(hit.keyword || '').trim().toLowerCase();\n    if (!keyword || deduped.has(keyword)) {\n      continue;\n    }\n\n    deduped.set(keyword, {\n      keyword,\n      weight: Number(hit.weight || 1) || 1,\n    });\n  }\n\n  return Array.from(deduped.values());\n}\n\nfunction asNumber(value) {\n  const normalized = String(value ?? '').replace(/,/g, '');\n  const parsed = Number(normalized);\n  return Number.isFinite(parsed) ? parsed : null;\n}\n\nfunction typeScore(processType) {\n  const normalized = String(processType || '').trim();\n  if (/convenio marco|cat[aá]logo/i.test(normalized)) {\n    return 0;\n  }\n\n  if (/subasta inversa/i.test(normalized)) {\n    return 25;\n  }\n\n  if (/cotizaci[oó]n|menor cuant[ií]a|licitaci[oó]n|concurso/i.test(normalized)) {\n    return 18;\n  }\n\n  return normalized ? 12 : 8;\n}\n\nfunction stateScore(state) {\n  const normalized = String(state || '').trim();\n  if (/entrega de propuesta|recepci[oó]n|convalid|preguntas|aclaraciones|por adjudicar|reprogramaci[oó]n|puja|calificaci[oó]n|audiencia/i.test(normalized)) {\n    return 12;\n  }\n\n  if (/suspendido|en curso/i.test(normalized)) {\n    return 4;\n  }\n\n  return 0;\n}\n\nfunction isClosedState(state) {\n  return /adjudicad|finalizad|registro de contratos|ejecuci[oó]n de contrato|desiert|cancelad|borrador/i.test(String(state || ''));\n}\n\nfunction buildDetailUrl(internalId, version) {\n  const encodedId = encodeURIComponent(String(internalId || '').trim());\n  const normalizedVersion = Number(version || 0);\n\n  if (!encodedId) {\n    return '';\n  }\n\n  if (normalizedVersion === -1 || normalizedVersion === -2) {\n    return 'https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/SC/sci.cpe?idSoliCompra=' + encodedId;\n  }\n\n  if (normalizedVersion === 3) {\n    return 'https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/CR/mostrarferiainicial.cpe?idSoliCompra=' + encodedId;\n  }\n\n  if (normalizedVersion === 2) {\n    return 'https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/PC/informacionProcesoContratacion2.cpe?idSoliCompra=' + encodedId;\n  }\n\n  return 'https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/PC/informacionProcesoContratacion.cpe?idSoliCompra=' + encodedId;\n}\n\nfunction parseDateScore(value) {\n  const timestamp = Date.parse(String(value || ''));\n  return Number.isFinite(timestamp) ? timestamp : 0;\n}\n\nfunction localDayStart(value) {\n  const parsed = new Date(String(value || ''));\n  if (Number.isNaN(parsed.getTime())) {\n    return 0;\n  }\n\n  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();\n}\n\nconst publicationCutoff = new Date();\npublicationCutoff.setHours(0, 0, 0, 0);\npublicationCutoff.setDate(publicationCutoff.getDate() - publicationLookbackDays);\nconst publicationCutoffTimestamp = publicationCutoff.getTime();\n\nfunction isOnOrAfterPublicationCutoff(value) {\n  const timestamp = localDayStart(value);\n  return timestamp !== 0 && timestamp >= publicationCutoffTimestamp;\n}\n\nconst inputs = $input.all();\nfor (let index = 0; index < inputs.length; index++) {\n  const payload = inputs[index].json;\n  const seed = $item(index).$node['Prepare Public Search Pages'].json;\n  const searchQuery = String(seed.searchQuery || seed.searchKeyword || '').trim().toLowerCase();\n  const seedKeywords = Array.isArray(seed.seedKeywords) && seed.seedKeywords.length > 0\n    ? seed.seedKeywords.map((keyword) => String(keyword || '').trim().toLowerCase()).filter(Boolean)\n    : (searchQuery ? [searchQuery] : []);\n  const rawHeader = payload?.headers?.['x-json'] || payload?.headers?.['X-JSON'] || '';\n  const rows = parseXJson(rawHeader);\n\n  for (const row of rows) {\n    const processCode = String(row.c || '').trim();\n    const internalId = String(row.i || '').trim();\n    if (!processCode || !internalId) {\n      continue;\n    }\n\n    const portalState = String(row.g || '').trim();\n    if (!includeClosed && isClosedState(portalState)) {\n      continue;\n    }\n\n    const title = String(row.d || processCode).trim();\n    const entity = String(row.r || 'Sin entidad').trim();\n    const processType = typeLabels[String(row.t || '').trim()] || ('Proceso ' + String(row.t || '').trim());\n    const publishedAt = String(row.f || '').trim();\n    if (!isOnOrAfterPublicationCutoff(publishedAt)) {\n      continue;\n    }\n\n    const amount = asNumber(row.p);\n    const searchHaystack = normalizeText([processCode, title, entity, processType, portalState, searchQuery].join(' '));\n    const seededHits = seedKeywords.map((keyword) => ({ keyword, weight: Number(seed.weight || 1) || 1 }));\n    const includeHits = uniqueHits(\n      includeRules.filter((rule) => searchHaystack.includes(normalizeText(rule.keyword))).concat(seededHits),\n    );\n    const excludeHits = uniqueHits(\n      excludeRules.filter((rule) => searchHaystack.includes(normalizeText(rule.keyword))),\n    );\n    const includeWeight = includeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n    const excludeWeight = excludeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n    const taxonomyScore = Math.max(0, Math.min(60, Math.round(includeWeight * 20) - Math.round(excludeWeight * 25)));\n    const heuristicScore = includeHits.length > 0 ? 15 : 0;\n    const previewScore = Math.max(0, Math.min(100, taxonomyScore + typeScore(processType) + stateScore(portalState) + heuristicScore));\n\n    if (includeHits.length === 0 || previewScore < 30) {\n      continue;\n    }\n\n    const current = candidates.get(processCode) || {\n      source: 'ocds',\n      external_id: processCode,\n      ocid_or_nic: processCode,\n      process_code: processCode,\n      titulo: title,\n      entidad: entity,\n      tipo: processType,\n      fecha_publicacion: publishedAt,\n      fecha_limite: '',\n      monto_ref: amount,\n      moneda: 'USD',\n      url: buildDetailUrl(internalId, row.v),\n      detail_internal_id: internalId,\n      detail_version: Number(row.v || 0) || 0,\n      portal_state: portalState,\n      initial_keywords: [],\n      raw_rows: [],\n      preview_score: previewScore,\n    };\n\n    for (const keyword of seedKeywords) {\n      if (!current.initial_keywords.includes(keyword)) {\n        current.initial_keywords.push(keyword);\n      }\n    }\n\n    current.preview_score = Math.max(current.preview_score || 0, previewScore);\n\n    if (!current.fecha_publicacion || parseDateScore(publishedAt) > parseDateScore(current.fecha_publicacion)) {\n      current.fecha_publicacion = publishedAt;\n    }\n\n    if (current.monto_ref === null && amount !== null) {\n      current.monto_ref = amount;\n    }\n\n    if (stateScore(portalState) >= stateScore(current.portal_state)) {\n      current.portal_state = portalState;\n    }\n\n    current.raw_rows.push({\n      searchQuery,\n      page: Number(seed.page || 0) || 0,\n      offset: Number(seed.offset || 0) || 0,\n      row,\n    });\n\n    candidates.set(processCode, current);\n  }\n}\n\nreturn Array.from(candidates.values())\n  .sort((left, right) => {\n    if ((right.preview_score || 0) !== (left.preview_score || 0)) {\n      return (right.preview_score || 0) - (left.preview_score || 0);\n    }\n\n    return parseDateScore(right.fecha_publicacion) - parseDateScore(left.fecha_publicacion);\n  })\n  .slice(0, maxCandidates)\n  .map((candidate) => ({ json: candidate }));"
       },
-      "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d05",
+      "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d06",
       "name": "Normalize Search Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1300,
+        1560,
         320
       ]
     },
     {
       "parameters": {
-        "jsCode": "const threshold = Number($env.MATCH_THRESHOLD || 60);\nconst rules = $items('Load Keyword Rules').map((item) => item.json);\nconst includeRules = rules.filter((rule) => String(rule.rule_type || '') === 'include');\nconst excludeRules = rules.filter((rule) => String(rule.rule_type || '') === 'exclude');\nconst typeWeights = {\n  'Subasta Inversa Electrónica': 25,\n  'Subasta Inversa Electronica': 25,\n  'Ínfimas Cuantías': 20,\n  'Infima Cuantia': 20,\n  'Necesidades de Contratación y Recepción de Proformas': 20,\n  'Necesidades de Contratacion y Recepcion de Proformas': 20,\n  'Bienes y Servicios únicos': 15,\n  'Bienes y Servicios unicos': 15,\n};\n\nfunction sqlText(value) {\n  return String(value ?? '').replace(/'/g, \"''\");\n}\n\nfunction sqlNumber(value) {\n  if (value === null || value === undefined || value === '') {\n    return 'NULL';\n  }\n\n  const parsed = Number(value);\n  return Number.isFinite(parsed) ? String(parsed) : 'NULL';\n}\n\nfunction normalizeText(value) {\n  return String(value ?? '').toLowerCase();\n}\n\nfunction normalizeProcessCode(value) {\n  const raw = String(value || '').trim();\n  return /-\\d{3,}$/.test(raw) ? raw.replace(/-\\d{3,}$/, '') : raw;\n}\n\nfunction typeScore(processType) {\n  const normalized = String(processType || '').trim();\n  return typeWeights[normalized] ?? (normalized ? 15 : 10);\n}\n\nfunction uniqueHits(rawHits) {\n  const deduped = new Map();\n\n  for (const hit of rawHits) {\n    const keyword = String(hit.keyword || '').trim().toLowerCase();\n    if (!keyword || deduped.has(keyword)) {\n      continue;\n    }\n\n    deduped.set(keyword, {\n      keyword,\n      family: hit.family || null,\n      weight: Number(hit.weight || 1) || 1,\n    });\n  }\n\n  return Array.from(deduped.values());\n}\n\nconst out = [];\nfor (const input of $input.all()) {\n  const candidate = input.json;\n  const title = String(candidate.titulo || candidate.ocid_or_nic || 'Sin titulo').trim();\n  const entity = String(candidate.entidad || 'Sin entidad').trim();\n  const processType = String(candidate.tipo || 'Sin tipo').trim();\n  const publishedAt = String(candidate.fecha_publicacion || '').trim();\n  const deadlineAt = String(candidate.fecha_limite || '').trim();\n  const amount = candidate.monto_ref ?? null;\n  const processCode = normalizeProcessCode(candidate.process_code || candidate.ocid_or_nic);\n  const currency = String(candidate.moneda || 'USD').trim() || 'USD';\n  const haystack = normalizeText([\n    title,\n    entity,\n    processType,\n    ...(Array.isArray(candidate.initial_keywords) ? candidate.initial_keywords : []),\n    JSON.stringify(candidate.candidate_payload || {}),\n  ].join(' '));\n\n  const seededHits = Array.isArray(candidate.initial_keywords)\n    ? candidate.initial_keywords.map((keyword) => ({ keyword, weight: 1 }))\n    : [];\n  const includeHits = uniqueHits(\n    includeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())).concat(seededHits),\n  );\n  const excludeHits = uniqueHits(\n    excludeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())),\n  );\n  const includeWeight = includeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const excludeWeight = excludeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const taxonomyScore = Math.max(0, Math.min(60, Math.round(includeWeight * 25) - Math.round(excludeWeight * 25)));\n  const heuristicScore = includeHits.length > 0 ? 15 : 0;\n  const matchScore = Math.max(0, Math.min(100, taxonomyScore + typeScore(processType) + heuristicScore));\n\n  if (matchScore < threshold) {\n    continue;\n  }\n\n  const recommendation = 'revisar';\n  const rawPayload = {\n    source: 'ocds',\n    candidate: candidate.candidate_payload || candidate,\n    keywords: candidate.initial_keywords || [],\n  };\n\n  out.push({\n    json: {\n      source: 'ocds',\n      external_id: candidate.external_id,\n      ocid_or_nic: candidate.ocid_or_nic,\n      process_code: processCode,\n      titulo: title,\n      entidad: entity,\n      tipo: processType,\n      fecha_publicacion: publishedAt,\n      fecha_limite: deadlineAt,\n      monto_ref: amount,\n      moneda: currency,\n      url: candidate.url,\n      invited_company_name: null,\n      is_invited_match: false,\n      keywords_hit: includeHits.map((hit) => hit.keyword),\n      keywords_hit_csv: includeHits.map((hit) => hit.keyword).join(','),\n      match_score: matchScore,\n      ai_score: 0,\n      recomendacion: recommendation,\n      estado: 'nuevo',\n      vendedor: '',\n      resultado: '',\n      raw_payload_string: sqlText(JSON.stringify(rawPayload)),\n      source_sql: sqlText('ocds'),\n      external_id_sql: sqlText(candidate.external_id),\n      ocid_or_nic_sql: sqlText(candidate.ocid_or_nic),\n      process_code_sql: sqlText(processCode),\n      titulo_sql: sqlText(title),\n      entidad_sql: sqlText(entity),\n      tipo_sql: sqlText(processType),\n      fecha_publicacion_sql: sqlText(publishedAt),\n      fecha_limite_sql: sqlText(deadlineAt),\n      monto_ref_sql: sqlNumber(amount),\n      moneda_sql: sqlText(currency || 'USD'),\n      url_sql: sqlText(candidate.url),\n      invited_company_name_sql: '',\n      recomendacion_sql: sqlText(recommendation),\n      is_invited_match_sql: 'FALSE',\n    },\n  });\n}\n\nreturn out;"
+        "url": "={{ 'https://www.compraspublicas.gob.ec/ProcesoContratacion/compras/ProcesoContratacion/tab.php?tab=2&id=' + encodeURIComponent($json.detail_internal_id) }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          }
+        }
       },
       "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d07",
+      "name": "Fetch Process Dates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        320
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "function stripTags(value) {\n  return String(value ?? '').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\n}\n\nfunction decodeEntities(value) {\n  return String(value ?? '')\n    .replace(/&nbsp;/gi, ' ')\n    .replace(/&amp;/gi, '&')\n    .replace(/&quot;/gi, '\"')\n    .replace(/&#39;/gi, \"'\")\n    .replace(/&ntilde;/gi, 'ñ')\n    .replace(/&Ntilde;/gi, 'Ñ')\n    .replace(/&aacute;/gi, 'á')\n    .replace(/&eacute;/gi, 'é')\n    .replace(/&iacute;/gi, 'í')\n    .replace(/&oacute;/gi, 'ó')\n    .replace(/&uacute;/gi, 'ú')\n    .replace(/&Aacute;/gi, 'Á')\n    .replace(/&Eacute;/gi, 'É')\n    .replace(/&Iacute;/gi, 'Í')\n    .replace(/&Oacute;/gi, 'Ó')\n    .replace(/&Uacute;/gi, 'Ú');\n}\n\nfunction normalizeLabel(value) {\n  return decodeEntities(stripTags(value))\n    .toLowerCase()\n    .replace(/[áàäâ]/g, 'a')\n    .replace(/[éèëê]/g, 'e')\n    .replace(/[íìïî]/g, 'i')\n    .replace(/[óòöô]/g, 'o')\n    .replace(/[úùüû]/g, 'u')\n    .replace(/ñ/g, 'n')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nfunction parseRows(html) {\n  const rows = new Map();\n  const regex = /<tr>\\s*<th[^>]*>([\\s\\S]*?)<\\/th>\\s*<td[^>]*>([\\s\\S]*?)<\\/td>/gi;\n  let match = regex.exec(String(html || ''));\n  while (match) {\n    const label = normalizeLabel(match[1]);\n    const value = decodeEntities(stripTags(match[2]));\n    if (label && value) {\n      rows.set(label, value);\n    }\n    match = regex.exec(String(html || ''));\n  }\n  return rows;\n}\n\nfunction pickDate(rows, labels) {\n  for (const label of labels) {\n    const value = rows.get(label);\n    if (value && /^\\d{4}-\\d{2}-\\d{2}/.test(value)) {\n      return value.replace(/\\s+/g, ' ').trim();\n    }\n  }\n  return '';\n}\n\nconst out = [];\nfor (let index = 0; index < $input.all().length; index++) {\n  const candidate = { ...$item(index).$node['Normalize Search Results'].json };\n  const html = String($input.all()[index].json.data || '');\n  const rows = parseRows(html);\n  const publishedAt = pickDate(rows, ['fecha de publicacion']);\n  const deadlineAt = pickDate(rows, [\n    'fecha limite entrega ofertas',\n    'fecha limite de entrega ofertas',\n    'fecha limite de entrega de ofertas',\n    'fecha final de puja',\n    'fecha estimada de adjudicacion',\n  ]);\n\n  if (publishedAt) {\n    candidate.fecha_publicacion = publishedAt;\n  }\n\n  if (deadlineAt) {\n    candidate.fecha_limite = deadlineAt;\n  }\n\n  out.push({ json: candidate });\n}\n\nreturn out;"
+      },
+      "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d11",
+      "name": "Merge Process Dates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const threshold = Number($env.MATCH_THRESHOLD || 60);\nconst rules = $items('Load Keyword Rules').map((item) => item.json);\nconst includeRules = rules.filter((rule) => String(rule.rule_type || '') === 'include');\nconst excludeRules = rules.filter((rule) => String(rule.rule_type || '') === 'exclude');\nconst includeClosed = String($env.OCDS_INCLUDE_CLOSED || 'false').toLowerCase() === 'true';\nconst typeWeights = {\n  'Subasta Inversa Electrónica': 25,\n  'Subasta Inversa Electronica': 25,\n  'Ínfimas Cuantías': 20,\n  'Infima Cuantia': 20,\n  'Necesidades de Contratación y Recepción de Proformas': 20,\n  'Necesidades de Contratacion y Recepcion de Proformas': 20,\n  'Bienes y Servicios únicos': 15,\n  'Bienes y Servicios unicos': 15,\n};\n\nfunction sqlText(value) {\n  return String(value ?? '').replace(/'/g, \"''\");\n}\n\nfunction sqlNumber(value) {\n  if (value === null || value === undefined || value === '') {\n    return 'NULL';\n  }\n\n  const parsed = Number(value);\n  return Number.isFinite(parsed) ? String(parsed) : 'NULL';\n}\n\nfunction normalizeText(value) {\n  return String(value ?? '')\n    .toLowerCase()\n    .replace(/[áàäâ]/g, 'a')\n    .replace(/[éèëê]/g, 'e')\n    .replace(/[íìïî]/g, 'i')\n    .replace(/[óòöô]/g, 'o')\n    .replace(/[úùüû]/g, 'u')\n    .replace(/ñ/g, 'n');\n}\n\nfunction normalizeProcessCode(value) {\n  const raw = String(value || '').trim();\n  return /-\\d{3,}$/.test(raw) ? raw.replace(/-\\d{3,}$/, '') : raw;\n}\n\nfunction typeScore(processType) {\n  const normalized = String(processType || '').trim();\n  return typeWeights[normalized] ?? (normalized ? 15 : 10);\n}\n\nfunction stateScore(state) {\n  const normalized = String(state || '').trim();\n  if (/entrega de propuesta|recepci[oó]n|convalid|preguntas|aclaraciones|por adjudicar|reprogramaci[oó]n|puja|calificaci[oó]n|audiencia/i.test(normalized)) {\n    return 12;\n  }\n\n  if (/suspendido|en curso/i.test(normalized)) {\n    return 4;\n  }\n\n  return 0;\n}\n\nfunction isClosedState(state) {\n  return /adjudicad|finalizad|registro de contratos|ejecuci[oó]n de contrato|desiert|cancelad|borrador/i.test(String(state || ''));\n}\n\nfunction uniqueHits(rawHits) {\n  const deduped = new Map();\n\n  for (const hit of rawHits) {\n    const keyword = String(hit.keyword || '').trim().toLowerCase();\n    if (!keyword || deduped.has(keyword)) {\n      continue;\n    }\n\n    deduped.set(keyword, {\n      keyword,\n      family: hit.family || null,\n      weight: Number(hit.weight || 1) || 1,\n    });\n  }\n\n  return Array.from(deduped.values());\n}\n\nconst out = [];\nfor (const input of $input.all()) {\n  const candidate = input.json;\n  const title = String(candidate.titulo || candidate.ocid_or_nic || 'Sin titulo').trim();\n  const entity = String(candidate.entidad || 'Sin entidad').trim();\n  const processType = String(candidate.tipo || 'Sin tipo').trim();\n  const portalState = String(candidate.portal_state || '').trim();\n\n  if (!includeClosed && isClosedState(portalState)) {\n    continue;\n  }\n\n  const publishedAt = String(candidate.fecha_publicacion || '').trim();\n  const deadlineAt = String(candidate.fecha_limite || '').trim();\n  const amount = candidate.monto_ref ?? null;\n  const processCode = normalizeProcessCode(candidate.process_code || candidate.ocid_or_nic);\n  const currency = String(candidate.moneda || 'USD').trim() || 'USD';\n  const haystack = normalizeText([\n    title,\n    entity,\n    processType,\n    portalState,\n    ...(Array.isArray(candidate.initial_keywords) ? candidate.initial_keywords : []),\n    JSON.stringify(candidate.raw_rows || {}),\n  ].join(' '));\n\n  const seededHits = Array.isArray(candidate.initial_keywords)\n    ? candidate.initial_keywords.map((keyword) => ({ keyword, weight: 1 }))\n    : [];\n  const includeHits = uniqueHits(\n    includeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())).concat(seededHits),\n  );\n  const excludeHits = uniqueHits(\n    excludeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())),\n  );\n  const includeWeight = includeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const excludeWeight = excludeHits.reduce((sum, hit) => sum + (Number(hit.weight || 1) || 1), 0);\n  const taxonomyScore = Math.max(0, Math.min(60, Math.round(includeWeight * 20) - Math.round(excludeWeight * 25)));\n  const heuristicScore = includeHits.length > 0 ? 15 : 0;\n  const baseScore = Number(candidate.preview_score || 0) || 0;\n  const matchScore = Math.max(0, Math.min(100, Math.max(baseScore, taxonomyScore + typeScore(processType) + stateScore(portalState) + heuristicScore)));\n\n  if (matchScore < threshold) {\n    continue;\n  }\n\n  const recommendation = /entrega de propuesta|recepci[oó]n|preguntas|aclaraciones|convalid/i.test(portalState) ? 'revisar' : 'observacion';\n  const rawPayload = {\n    source: 'ocds_public_search',\n    detail_internal_id: candidate.detail_internal_id || null,\n    detail_version: candidate.detail_version || null,\n    portal_state: portalState,\n    search_matches: candidate.raw_rows || [],\n    keywords: candidate.initial_keywords || [],\n  };\n\n  out.push({\n    json: {\n      source: 'ocds',\n      external_id: candidate.external_id,\n      ocid_or_nic: candidate.ocid_or_nic,\n      process_code: processCode,\n      titulo: title,\n      entidad: entity,\n      tipo: processType,\n      fecha_publicacion: publishedAt,\n      fecha_limite: deadlineAt,\n      monto_ref: amount,\n      moneda: currency,\n      url: candidate.url,\n      invited_company_name: null,\n      is_invited_match: false,\n      keywords_hit: includeHits.map((hit) => hit.keyword),\n      keywords_hit_csv: includeHits.map((hit) => hit.keyword).join(','),\n      match_score: matchScore,\n      ai_score: 0,\n      recomendacion: recommendation,\n      estado: 'nuevo',\n      vendedor: '',\n      resultado: '',\n      raw_payload_string: sqlText(JSON.stringify(rawPayload)),\n      source_sql: sqlText('ocds'),\n      external_id_sql: sqlText(candidate.external_id),\n      ocid_or_nic_sql: sqlText(candidate.ocid_or_nic),\n      process_code_sql: sqlText(processCode),\n      titulo_sql: sqlText(title),\n      entidad_sql: sqlText(entity),\n      tipo_sql: sqlText(processType),\n      fecha_publicacion_sql: sqlText(publishedAt),\n      fecha_limite_sql: sqlText(deadlineAt),\n      monto_ref_sql: sqlNumber(amount),\n      moneda_sql: sqlText(currency || 'USD'),\n      url_sql: sqlText(candidate.url),\n      invited_company_name_sql: '',\n      recomendacion_sql: sqlText(recommendation),\n      is_invited_match_sql: 'FALSE',\n    },\n  });\n}\n\nreturn out;"
+      },
+      "id": "d0fc2f9f-4f1d-4c14-9f68-9d298b2f7d12",
       "name": "Score Filter Prepare",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1560,
+        2340,
         320
       ]
     },
@@ -118,7 +247,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1820,
+        2600,
         320
       ],
       "credentials": {
@@ -137,7 +266,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2080,
+        2860,
         320
       ]
     },
@@ -156,7 +285,7 @@
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2.1,
       "position": [
-        2340,
+        3120,
         320
       ],
       "credentials": {
@@ -205,14 +334,25 @@
       "main": [
         [
           {
-            "node": "Fetch OCDS Search",
+            "node": "Prepare Public Search Pages",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Fetch OCDS Search": {
+    "Prepare Public Search Pages": {
+      "main": [
+        [
+          {
+            "node": "Fetch OCDS Public Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch OCDS Public Search": {
       "main": [
         [
           {
@@ -224,6 +364,28 @@
       ]
     },
     "Normalize Search Results": {
+      "main": [
+        [
+          {
+            "node": "Fetch Process Dates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Process Dates": {
+      "main": [
+        [
+          {
+            "node": "Merge Process Dates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Process Dates": {
       "main": [
         [
           {

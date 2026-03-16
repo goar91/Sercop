@@ -1,0 +1,81 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "backend/1.0.0": {
+        "dependencies": {
+          "Npgsql": "10.0.2",
+          "PdfPig": "0.1.13"
+        },
+        "runtime": {
+          "backend.dll": {}
+        }
+      },
+      "Npgsql/10.0.2": {
+        "runtime": {
+          "lib/net10.0/Npgsql.dll": {
+            "assemblyVersion": "10.0.2.0",
+            "fileVersion": "10.0.2.0"
+          }
+        }
+      },
+      "PdfPig/0.1.13": {
+        "runtime": {
+          "lib/net8.0/UglyToad.PdfPig.Core.dll": {
+            "assemblyVersion": "0.1.13.0",
+            "fileVersion": "0.1.13.0"
+          },
+          "lib/net8.0/UglyToad.PdfPig.DocumentLayoutAnalysis.dll": {
+            "assemblyVersion": "0.1.13.0",
+            "fileVersion": "0.1.13.0"
+          },
+          "lib/net8.0/UglyToad.PdfPig.Fonts.dll": {
+            "assemblyVersion": "0.1.13.0",
+            "fileVersion": "0.1.13.0"
+          },
+          "lib/net8.0/UglyToad.PdfPig.Package.dll": {
+            "assemblyVersion": "0.1.13.0",
+            "fileVersion": "0.1.13.0"
+          },
+          "lib/net8.0/UglyToad.PdfPig.Tokenization.dll": {
+            "assemblyVersion": "0.1.13.0",
+            "fileVersion": "0.1.13.0"
+          },
+          "lib/net8.0/UglyToad.PdfPig.Tokens.dll": {
+            "assemblyVersion": "0.1.13.0",
+            "fileVersion": "0.1.13.0"
+          },
+          "lib/net8.0/UglyToad.PdfPig.dll": {
+            "assemblyVersion": "0.1.13.0",
+            "fileVersion": "0.1.13.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "backend/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Npgsql/10.0.2": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-q5RfBI+wywJSFUNDE1L4ZbHEHCFTblo8Uf6A6oe4feOUFYiUQXyAf9GBh5qEZpvJaHiEbpBPkQumjEhXCJxdrg==",
+      "path": "npgsql/10.0.2",
+      "hashPath": "npgsql.10.0.2.nupkg.sha512"
+    },
+    "PdfPig/0.1.13": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-2AUWNKHbkDr2Ofgi2vVPN/Ya++jhsuHd54xeKveqKOwDiAy2E2QhczOUKyU29ADRHoEJgQUhwHFgtbD6nCZ2WA==",
+      "path": "pdfpig/0.1.13",
+      "hashPath": "pdfpig.0.1.13.nupkg.sha512"
+    }
+  }
+}

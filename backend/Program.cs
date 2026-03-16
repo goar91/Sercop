@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using System.Text.Json;
 using backend;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Json;
@@ -69,10 +70,17 @@ builder.Services.AddHttpClient<SercopInvitationPublicClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(45);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("HDM-SERCOP-CRM/1.0");
 });
-builder.Services.AddHttpClient<AiAssistantService>(client =>
+builder.Services.AddHttpClient<PersonalAssistantService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(180);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("SERCOP-Personal-AI/1.0");
 });
+builder.Services.AddScoped<PersonalAssistantDocumentService>();
+builder.Services.AddHttpClient<StudioService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(300);
+});
+builder.Services.AddSingleton<VideoRenderService>();
 builder.Services.AddHostedService<PublicInvitationSyncService>();
 
 var app = builder.Build();
@@ -84,6 +92,9 @@ var frontendCandidates = new[]
 }.Select(Path.GetFullPath).ToArray();
 var frontendDist = frontendCandidates.FirstOrDefault(Directory.Exists) ?? frontendCandidates[0];
 var hasFrontend = Directory.Exists(frontendDist);
+var personalAssistantPage = Path.Combine(app.Environment.ContentRootPath, "backend", "PersonalAssistantPage.html");
+var personalAssistantUploadRoot = Path.GetFullPath(Path.Combine(app.Environment.ContentRootPath, "backups", "personal-ai", "uploads"));
+Directory.CreateDirectory(personalAssistantUploadRoot);
 
 app.UseExceptionHandler(exceptionApp =>
 {
@@ -267,6 +278,37 @@ app.MapPost("/api/invitations/import", async (
     return Results.Ok(result);
 });
 
+app.MapPost("/api/invitations/verify-codes", async (
+    InvitationCodeVerificationRequest request,
+    IConfiguration configuration,
+    CrmRepository repository,
+    SercopPublicClient sercopPublicClient,
+    SercopInvitationPublicClient invitationClient,
+    CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.CodesText))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["codesText"] = ["Debes ingresar al menos un codigo de proceso."]
+        });
+    }
+
+    var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
+    var invitedCompanyRuc = configuration["INVITED_COMPANY_RUC"];
+    var fallbackYear = int.TryParse(configuration["OCDS_YEAR"], out var configuredYear) ? configuredYear : DateTime.UtcNow.Year;
+    var result = await repository.VerifyInvitationCodesAsync(
+        request,
+        sercopPublicClient,
+        invitationClient,
+        invitedCompanyName,
+        invitedCompanyRuc,
+        fallbackYear,
+        cancellationToken);
+
+    return Results.Ok(result);
+});
+
 app.MapPost("/api/invitations/sync", async (
     IConfiguration configuration,
     CrmRepository repository,
@@ -367,7 +409,30 @@ app.MapGet("/api/workflows/{id}", async (string id, CrmRepository repository, Ca
     return workflow is null ? Results.NotFound() : Results.Ok(workflow);
 });
 
-app.MapPost("/api/assistant/ask", async (AssistantAskRequest request, AiAssistantService assistant, CancellationToken cancellationToken) =>
+app.MapGet("/api/personal-ai/sessions", async (CrmRepository repository, CancellationToken cancellationToken) =>
+{
+    var sessions = await repository.GetPersonalAssistantSessionsAsync(cancellationToken);
+    return Results.Ok(sessions);
+});
+
+app.MapGet("/api/personal-ai/sessions/{id:long}", async (long id, CrmRepository repository, CancellationToken cancellationToken) =>
+{
+    var session = await repository.GetPersonalAssistantSessionAsync(id, cancellationToken);
+    return session is null ? Results.NotFound() : Results.Ok(session);
+});
+
+app.MapGet("/api/personal-ai/memory", async (
+    string? search,
+    int? limit,
+    CrmRepository repository,
+    CancellationToken cancellationToken) =>
+{
+    var safeLimit = Math.Clamp(limit ?? 24, 1, 100);
+    var memory = await repository.ListPersonalAssistantMemoryAsync(search, safeLimit, cancellationToken);
+    return Results.Ok(memory);
+});
+
+app.MapPost("/api/personal-ai/ask", async (PersonalAssistantAskRequest request, PersonalAssistantService assistant, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.Question))
     {
@@ -379,6 +444,173 @@ app.MapPost("/api/assistant/ask", async (AssistantAskRequest request, AiAssistan
 
     var reply = await assistant.AskAsync(request, cancellationToken);
     return Results.Ok(reply);
+});
+
+app.MapPost("/api/personal-ai/analyze-documents", async (
+    HttpRequest httpRequest,
+    PersonalAssistantService assistant,
+    CancellationToken cancellationToken) =>
+{
+    var form = await httpRequest.ReadFormAsync(cancellationToken);
+    var question = form["question"].ToString();
+    var searchMode = form["searchMode"].ToString();
+    var sessionIdText = form["sessionId"].ToString();
+    var sessionId = long.TryParse(sessionIdText, out var parsedSessionId) ? parsedSessionId : (long?)null;
+
+    if (form.Files.Count == 0)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["files"] = ["Debes subir al menos un documento."]
+        });
+    }
+
+    try
+    {
+        var reply = await assistant.AnalyzeDocumentsAsync(question, sessionId, searchMode, form.Files.ToList(), cancellationToken);
+        return Results.Ok(reply);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["files"] = [exception.Message]
+        });
+    }
+});
+
+app.MapGet("/api/personal-ai/uploads/{*relativePath}", (string relativePath) =>
+{
+    if (string.IsNullOrWhiteSpace(relativePath))
+    {
+        return Results.NotFound();
+    }
+
+    var sanitized = relativePath.Replace('/', Path.DirectorySeparatorChar);
+    var absolutePath = Path.GetFullPath(Path.Combine(personalAssistantUploadRoot, sanitized));
+    if (!absolutePath.StartsWith(personalAssistantUploadRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(absolutePath))
+    {
+        return Results.NotFound();
+    }
+
+    return Results.File(absolutePath, "application/octet-stream", Path.GetFileName(absolutePath));
+});
+
+app.MapPost("/api/assistant/ask", async (AssistantAskRequest request, PersonalAssistantService assistant, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Question))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["question"] = ["La pregunta es obligatoria."]
+        });
+    }
+
+    var reply = await assistant.AskAsync(new PersonalAssistantAskRequest(
+        request.Question,
+        null,
+        "auto",
+        request.FilePath,
+        request.Language,
+        request.Selection,
+        request.CodeContext), cancellationToken);
+
+    return Results.Ok(new AssistantReplyDto(
+        request.Module ?? "personal",
+        reply.Model,
+        "Asistente personal desacoplado del CRM.",
+        reply.Answer,
+        reply.Sources));
+});
+
+app.MapGet("/api/studio/assets", async (
+    string? assetScope,
+    long? opportunityId,
+    string? workflowId,
+    CrmRepository repository,
+    CancellationToken cancellationToken) =>
+{
+    var scope = NormalizeStudioScope(assetScope, opportunityId, workflowId);
+    var assets = await repository.GetStudioAssetsAsync(scope, opportunityId, workflowId, cancellationToken);
+    return Results.Ok(assets);
+});
+
+app.MapGet("/api/studio/assets/{id:long}", async (long id, CrmRepository repository, CancellationToken cancellationToken) =>
+{
+    var asset = await repository.GetStudioAssetAsync(id, cancellationToken);
+    return asset is null ? Results.NotFound() : Results.Ok(asset);
+});
+
+app.MapGet("/api/studio/assets/{id:long}/download", async (long id, CrmRepository repository, IWebHostEnvironment environment, CancellationToken cancellationToken) =>
+{
+    var asset = await repository.GetStudioAssetAsync(id, cancellationToken);
+    if (asset is null)
+    {
+        return Results.NotFound();
+    }
+
+    if (string.Equals(asset.AssetType, "rendered_video", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            using var payload = JsonDocument.Parse(asset.PayloadJson);
+            if (payload.RootElement.TryGetProperty("relativePath", out var pathElement))
+            {
+                var relativePath = pathElement.GetString();
+                if (!string.IsNullOrWhiteSpace(relativePath))
+                {
+                    var absolutePath = Path.GetFullPath(Path.Combine(environment.ContentRootPath, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+                    if (File.Exists(absolutePath))
+                    {
+                        return Results.File(absolutePath, asset.Format, $"{SanitizeFileName(asset.Title)}.mp4");
+                    }
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return Results.NotFound();
+    }
+
+    var extension = asset.Format switch
+    {
+        "text/markdown" => "md",
+        "application/json" => "json",
+        "application/x-subrip" => "srt",
+        _ => "txt"
+    };
+
+    return Results.File(
+        System.Text.Encoding.UTF8.GetBytes(asset.ContentText ?? string.Empty),
+        asset.Format,
+        $"{SanitizeFileName(asset.Title)}.{extension}");
+});
+
+app.MapPost("/api/studio/generate", async (StudioGenerateRequest request, StudioService studioService, CancellationToken cancellationToken) =>
+{
+    var errors = ValidateStudioRequest(request);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
+    var result = await studioService.GenerateAsync(request, cancellationToken);
+    return Results.Ok(result);
+});
+
+app.MapGet("/assistant", async (HttpContext context) =>
+{
+    if (!File.Exists(personalAssistantPage))
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        await context.Response.WriteAsync("Personal assistant UI not found.");
+        return;
+    }
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.SendFileAsync(personalAssistantPage);
 });
 
 app.MapFallback(async context =>
@@ -426,6 +658,42 @@ static Dictionary<string, string[]> ValidateKeywordRuleRequest(KeywordRuleUpsert
     }
 
     return errors;
+}
+
+static Dictionary<string, string[]> ValidateStudioRequest(StudioGenerateRequest request)
+{
+    var errors = new Dictionary<string, string[]>();
+    var scope = NormalizeStudioScope(request.AssetScope, request.OpportunityId, request.WorkflowId);
+
+    if (scope == "opportunity" && request.OpportunityId is null)
+    {
+        errors["opportunityId"] = ["Debes seleccionar una oportunidad para este scope."];
+    }
+
+    if (scope == "workflow" && string.IsNullOrWhiteSpace(request.WorkflowId))
+    {
+        errors["workflowId"] = ["Debes seleccionar un workflow para este scope."];
+    }
+
+    return errors;
+}
+
+static string NormalizeStudioScope(string? scope, long? opportunityId, string? workflowId)
+    => scope?.Trim().ToLowerInvariant() switch
+    {
+        "opportunity" when opportunityId is not null => "opportunity",
+        "workflow" when !string.IsNullOrWhiteSpace(workflowId) => "workflow",
+        "dashboard" => "dashboard",
+        _ when opportunityId is not null => "opportunity",
+        _ when !string.IsNullOrWhiteSpace(workflowId) => "workflow",
+        _ => "dashboard"
+    };
+
+static string SanitizeFileName(string value)
+{
+    var invalid = Path.GetInvalidFileNameChars();
+    var safe = new string(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray()).Trim();
+    return string.IsNullOrWhiteSpace(safe) ? "asset" : safe;
 }
 
 

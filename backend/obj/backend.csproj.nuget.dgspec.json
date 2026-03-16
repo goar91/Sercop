@@ -10,7 +10,7 @@
         "projectUniqueName": "H:\\Programación\\SERCOP\\Sercop\\backend\\backend.csproj",
         "projectName": "backend",
         "projectPath": "H:\\Programación\\SERCOP\\Sercop\\backend\\backend.csproj",
-        "packagesPath": "C:\\Users\\gerso\\.nuget\\packages\\",
+        "packagesPath": "H:\\Programación\\SERCOP\\Sercop\\.dotnet\\.nuget\\packages\\",
         "outputPath": "H:\\Programación\\SERCOP\\Sercop\\backend\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
@@ -53,6 +53,10 @@
             "Npgsql": {
               "target": "Package",
               "version": "[10.0.2, )"
+            },
+            "PdfPig": {
+              "target": "Package",
+              "version": "[0.1.13, )"
             }
           },
           "imports": [

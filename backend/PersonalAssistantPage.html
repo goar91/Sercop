@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Asistente Personal</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #edf2f7;
+      --panel: rgba(255, 255, 255, 0.9);
+      --panel-strong: #ffffff;
+      --line: rgba(15, 23, 42, 0.1);
+      --text: #102033;
+      --muted: #5d7187;
+      --brand: #0f766e;
+      --brand-dark: #115e59;
+      --accent: #b45309;
+      --danger: #b42318;
+      --shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 24%),
+        radial-gradient(circle at bottom right, rgba(180, 83, 9, 0.12), transparent 22%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    .shell {
+      display: grid;
+      gap: 1rem;
+      min-height: 100vh;
+      padding: 1.2rem;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.4rem;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 248, 247, 0.92)),
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.14), transparent 26%);
+    }
+
+    .hero h1 {
+      margin: 0.2rem 0 0.5rem;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p,
+    .meta-note,
+    .hint,
+    .message-meta,
+    .sources a {
+      color: var(--muted);
+    }
+
+    .hero-actions,
+    .toolbar,
+    .composer-actions,
+    .session-actions {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 18rem minmax(0, 1fr);
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .panel {
+      display: grid;
+      gap: 1rem;
+      padding: 1rem;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .panel-header h2,
+    .panel-header h3,
+    .message-body,
+    pre {
+      margin: 0;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--brand);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.3rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: rgba(15, 118, 110, 0.1);
+      color: var(--brand);
+    }
+
+    .chip.warn {
+      background: rgba(180, 83, 9, 0.12);
+      color: var(--accent);
+    }
+
+    .chip.muted {
+      background: rgba(15, 23, 42, 0.06);
+      color: var(--muted);
+    }
+
+    button,
+    select,
+    textarea,
+    input {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      border: 0;
+      border-radius: 999px;
+      padding: 0.82rem 1rem;
+      transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+      color: #fff;
+      box-shadow: 0 14px 24px rgba(15, 118, 110, 0.2);
+    }
+
+    button.ghost {
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
+      color: var(--text);
+    }
+
+    button[disabled] {
+      opacity: 0.58;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    select,
+    textarea,
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 0.82rem 0.95rem;
+      background: rgba(255, 255, 255, 0.85);
+      color: var(--text);
+    }
+
+    textarea {
+      min-height: 8rem;
+      resize: vertical;
+    }
+
+    .session-list,
+    .message-list,
+    .sources,
+    .upload-list {
+      display: grid;
+      gap: 0.75rem;
+    }
+
+    .session-card,
+    .message-card {
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: var(--panel-strong);
+      border-radius: 20px;
+      padding: 0.95rem;
+    }
+
+    .session-card {
+      text-align: left;
+      width: 100%;
+    }
+
+    .session-card.active {
+      border-color: rgba(15, 118, 110, 0.34);
+      box-shadow: inset 0 0 0 1px rgba(15, 118, 110, 0.12);
+    }
+
+    .message-card.user {
+      background: rgba(15, 118, 110, 0.08);
+    }
+
+    .message-card.assistant {
+      background: rgba(255, 255, 255, 0.96);
+    }
+
+    .message-meta {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.55rem;
+      font-size: 0.82rem;
+    }
+
+    .message-body {
+      white-space: pre-wrap;
+      line-height: 1.55;
+    }
+
+    .sources a {
+      display: block;
+      text-decoration: none;
+      word-break: break-word;
+      padding: 0.75rem 0.85rem;
+      border-radius: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      background: rgba(248, 250, 252, 0.92);
+    }
+
+    .upload-box {
+      display: grid;
+      gap: 0.55rem;
+      padding: 0.9rem;
+      border: 1px dashed rgba(15, 23, 42, 0.16);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.5);
+    }
+
+    .upload-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.7rem 0.85rem;
+      border-radius: 14px;
+      background: rgba(248, 250, 252, 0.92);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .composer {
+      display: grid;
+      gap: 0.85rem;
+    }
+
+    .toolbar {
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .status {
+      min-height: 1.4rem;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .status.error {
+      color: var(--danger);
+    }
+
+    .empty {
+      display: grid;
+      place-items: center;
+      min-height: 12rem;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed rgba(15, 23, 42, 0.15);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.45);
+      padding: 1rem;
+    }
+
+    @media (max-width: 1280px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .hero,
+      .toolbar,
+      .panel-header {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Asistente personal</p>
+        <h1>Asistente privado + web verificada</h1>
+        <p>Este asistente no debe asumir nada: usa conocimiento guardado, busca en la web cuando falta evidencia y trabaja sobre documentos, codigo, investigacion, analisis tecnico y decisiones operativas.</p>
+        <p class="meta-note">Nota: conserva contexto verificado para consultas futuras; aprende por memoria persistente, no por reentrenamiento del modelo base.</p>
+      </div>
+      <div class="hero-actions">
+        <button id="new-session" type="button" class="ghost">Nueva sesion</button>
+        <button id="open-crm" type="button" class="primary">Volver al CRM</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <aside class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Sesiones</p>
+            <h2>Conversaciones</h2>
+          </div>
+          <span id="session-count" class="chip muted">0</span>
+        </div>
+        <div id="session-list" class="session-list"></div>
+      </aside>
+
+      <main class="panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">Chat</p>
+            <h2 id="chat-title">Sin sesion activa</h2>
+          </div>
+          <div class="session-actions">
+            <span id="search-mode-pill" class="chip">auto</span>
+            <span id="web-status" class="chip warn">sin consulta</span>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <label>
+            <span class="hint">Modo de busqueda</span>
+            <select id="search-mode">
+              <option value="auto">Auto</option>
+              <option value="web">Web primero</option>
+              <option value="memory">Solo local</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="status" class="status"></div>
+        <section id="message-list" class="message-list"></section>
+
+        <form id="composer" class="composer">
+          <label class="upload-box">
+            <span class="hint">Documentos para analizar</span>
+            <input id="document-upload" type="file" multiple accept=".txt,.md,.markdown,.json,.csv,.tsv,.html,.htm,.xml,.yaml,.yml,.log,.docx,.pdf,.cs,.ts,.tsx,.js,.jsx,.sql,.ps1,.py,.java,.go,.rs,.php,.css,.scss,.sh,.bat,.cmd">
+            <span class="hint">Puedes subir varios documentos y luego indicar la tarea: resumir, comparar, extraer hallazgos, revisar riesgos, depurar, documentar, planificar o generar acciones.</span>
+            <div id="upload-list" class="upload-list"></div>
+          </label>
+          <textarea id="question" placeholder="Escribe la instruccion. Ejemplos: resume estos documentos, compara versiones, extrae riesgos, crea un plan de accion, revisa codigo, diseña arquitectura o investiga en la web con evidencia."></textarea>
+          <div class="composer-actions">
+            <button id="send" type="submit" class="primary">Consultar</button>
+            <button id="reload" type="button" class="ghost">Recargar</button>
+          </div>
+        </form>
+      </main>
+
+    </section>
+  </div>
+
+  <script>
+    const state = {
+      sessions: [],
+      session: null,
+      currentSessionId: null,
+      sending: false,
+      latestReply: null
+    };
+
+    const elements = {
+      sessionList: document.getElementById('session-list'),
+      sessionCount: document.getElementById('session-count'),
+      chatTitle: document.getElementById('chat-title'),
+      messageList: document.getElementById('message-list'),
+      searchMode: document.getElementById('search-mode'),
+      searchModePill: document.getElementById('search-mode-pill'),
+      webStatus: document.getElementById('web-status'),
+      question: document.getElementById('question'),
+      status: document.getElementById('status'),
+      composer: document.getElementById('composer'),
+      send: document.getElementById('send'),
+      reload: document.getElementById('reload'),
+      newSession: document.getElementById('new-session'),
+      openCrm: document.getElementById('open-crm'),
+      documentUpload: document.getElementById('document-upload'),
+      uploadList: document.getElementById('upload-list')
+    };
+
+    async function api(path, options) {
+      const headers = {
+        ...(options && options.headers ? options.headers : {})
+      };
+      const body = options && Object.prototype.hasOwnProperty.call(options, 'body') ? options.body : undefined;
+      if (!(body instanceof FormData) && !headers['Content-Type']) {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      const response = await fetch(path, {
+        ...options,
+        headers
+      });
+
+      if (!response.ok) {
+        let message = response.statusText || 'Request failed';
+        try {
+          const problem = await response.json();
+          message = problem.detail || problem.title || message;
+        } catch {
+        }
+        throw new Error(message);
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      return contentType.includes('application/json') ? response.json() : response.text();
+    }
+
+    function setStatus(message, isError) {
+      elements.status.textContent = message || '';
+      elements.status.className = isError ? 'status error' : 'status';
+    }
+
+    function escapeHtml(value) {
+      const span = document.createElement('span');
+      span.textContent = value || '';
+      return span.innerHTML;
+    }
+
+    function formatDate(value) {
+      if (!value) {
+        return '';
+      }
+      return new Date(value).toLocaleString();
+    }
+
+    function renderSessions() {
+      elements.sessionCount.textContent = String(state.sessions.length);
+      if (state.sessions.length === 0) {
+        elements.sessionList.innerHTML = '<div class="empty">Todavia no hay sesiones. Inicia la primera consulta.</div>';
+        return;
+      }
+
+      elements.sessionList.innerHTML = state.sessions.map((session) => `
+        <button type="button" class="session-card ${session.id === state.currentSessionId ? 'active' : ''}" data-session-id="${session.id}">
+          <strong>${escapeHtml(session.title)}</strong>
+          <div class="message-meta">
+            <span>${session.messageCount} mensajes</span>
+            <span>${escapeHtml(formatDate(session.updatedAt))}</span>
+          </div>
+        </button>
+      `).join('');
+
+      elements.sessionList.querySelectorAll('[data-session-id]').forEach((button) => {
+        button.addEventListener('click', () => {
+          const id = Number(button.getAttribute('data-session-id'));
+          if (id) {
+            loadSession(id);
+          }
+        });
+      });
+    }
+
+    function renderMessages() {
+      if (!state.session || !state.session.messages || state.session.messages.length === 0) {
+        elements.chatTitle.textContent = state.session ? state.session.title : 'Sin sesion activa';
+        elements.messageList.innerHTML = '<div class="empty">Haz una pregunta. El asistente usara tu memoria y, si hace falta, saldra a la web.</div>';
+        return;
+      }
+
+      elements.chatTitle.textContent = state.session.title;
+      elements.messageList.innerHTML = state.session.messages.map((message) => {
+        const sources = Array.isArray(message.sources) && message.sources.length > 0
+          ? `
+            <div class="sources">
+              ${message.sources.map((source) => `
+                <a href="${escapeHtml(source.reference)}" target="_blank" rel="noopener">
+                  <strong>${escapeHtml(source.label)}</strong><br>
+                  <span>${escapeHtml(source.kind)} · ${escapeHtml(source.reference)}</span>
+                </a>
+              `).join('')}
+            </div>
+          `
+          : '';
+
+        return `
+          <article class="message-card ${escapeHtml(message.role)}">
+            <div class="message-meta">
+              <span class="chip ${message.role === 'assistant' ? '' : 'muted'}">${escapeHtml(message.role)}</span>
+              ${message.model ? `<span>${escapeHtml(message.model)}</span>` : ''}
+              <span>${escapeHtml(formatDate(message.createdAt))}</span>
+            </div>
+            <pre class="message-body">${escapeHtml(message.content)}</pre>
+            ${sources}
+          </article>
+        `;
+      }).join('');
+    }
+
+    function renderSelectedUploads() {
+      const files = Array.from(elements.documentUpload.files || []);
+      if (files.length === 0) {
+        elements.uploadList.innerHTML = '<div class="hint">Sin documentos cargados para esta consulta.</div>';
+        return;
+      }
+
+      elements.uploadList.innerHTML = files.map((file) => `
+        <div class="upload-item">
+          <strong>${escapeHtml(file.name)}</strong>
+          <span>${Math.max(1, Math.round(file.size / 1024))} KB</span>
+        </div>
+      `).join('');
+    }
+
+    async function loadSessions(preserveSelection) {
+      state.sessions = await api('/api/personal-ai/sessions');
+      if (!preserveSelection && state.sessions.length > 0 && !state.currentSessionId) {
+        state.currentSessionId = state.sessions[0].id;
+      }
+      renderSessions();
+    }
+
+    async function loadSession(sessionId) {
+      state.currentSessionId = sessionId;
+      state.session = await api(`/api/personal-ai/sessions/${sessionId}`);
+      renderSessions();
+      renderMessages();
+    }
+
+    async function askQuestion(event) {
+      event.preventDefault();
+      const question = elements.question.value.trim();
+      const files = Array.from(elements.documentUpload.files || []);
+      if ((!question && files.length === 0) || state.sending) {
+        return;
+      }
+
+      state.sending = true;
+      elements.send.disabled = true;
+      setStatus('Consultando y verificando evidencia...', false);
+
+      try {
+        const reply = files.length > 0
+          ? await (() => {
+              const formData = new FormData();
+              formData.append('question', question);
+              formData.append('searchMode', elements.searchMode.value);
+              if (state.currentSessionId) {
+                formData.append('sessionId', String(state.currentSessionId));
+              }
+              files.forEach((file) => formData.append('files', file));
+              return api('/api/personal-ai/analyze-documents', {
+                method: 'POST',
+                body: formData
+              });
+            })()
+          : await api('/api/personal-ai/ask', {
+              method: 'POST',
+              body: JSON.stringify({
+                question,
+                sessionId: state.currentSessionId,
+                searchMode: elements.searchMode.value
+              })
+            });
+
+        state.latestReply = reply;
+        elements.searchModePill.textContent = reply.searchMode;
+        elements.webStatus.textContent = reply.usedWebSearch ? `web +${reply.learnedItems}` : 'solo local';
+        elements.question.value = '';
+        elements.documentUpload.value = '';
+        renderSelectedUploads();
+
+        await loadSessions(true);
+        await loadSession(reply.sessionId);
+        const analyzedDocuments = Array.isArray(reply.uploadedDocuments) ? reply.uploadedDocuments.length : 0;
+        setStatus(`Respuesta generada con ${reply.model}${analyzedDocuments > 0 ? ` y ${analyzedDocuments} documento(s)` : ''}.`, false);
+      } catch (error) {
+        setStatus(error.message || 'No se pudo consultar el asistente.', true);
+      } finally {
+        state.sending = false;
+        elements.send.disabled = false;
+      }
+    }
+
+    async function createNewSession() {
+      state.currentSessionId = null;
+      state.session = null;
+      state.latestReply = null;
+      elements.webStatus.textContent = 'sin consulta';
+      elements.chatTitle.textContent = 'Nueva sesion';
+      renderSessions();
+      renderMessages();
+      elements.question.focus();
+      setStatus('Sesion lista. La siguiente pregunta abrira una conversacion nueva.', false);
+    }
+
+    async function reloadAll() {
+      try {
+        setStatus('Recargando sesiones...', false);
+        await loadSessions(false);
+        if (state.currentSessionId) {
+          await loadSession(state.currentSessionId);
+        } else {
+          renderMessages();
+        }
+        setStatus('', false);
+      } catch (error) {
+        setStatus(error.message || 'No se pudo recargar el asistente.', true);
+      }
+    }
+
+    elements.composer.addEventListener('submit', askQuestion);
+    elements.reload.addEventListener('click', reloadAll);
+    elements.newSession.addEventListener('click', createNewSession);
+    elements.openCrm.addEventListener('click', () => {
+      window.location.href = '/';
+    });
+    elements.documentUpload.addEventListener('change', renderSelectedUploads);
+    elements.searchMode.addEventListener('change', () => {
+      elements.searchModePill.textContent = elements.searchMode.value;
+    });
+
+    elements.searchModePill.textContent = elements.searchMode.value;
+    renderSelectedUploads();
+    reloadAll();
+  </script>
+</body>
+</html>

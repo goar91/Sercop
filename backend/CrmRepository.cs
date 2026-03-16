@@ -70,6 +70,8 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
                 assigned_user_name
             from crm_opportunity_overview
             where
+                (fecha_publicacion at time zone 'America/Guayaquil')::date >= (now() at time zone 'America/Guayaquil')::date
+                and
                 (@search is null
                     or titulo ilike '%' || @search || '%'
                     or coalesce(entidad, '') ilike '%' || @search || '%'
@@ -81,8 +83,8 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
                 and (not @invited_only or is_invited_match)
             order by
                 is_invited_match desc,
-                fecha_limite asc nulls last,
                 fecha_publicacion desc nulls last,
+                fecha_limite asc nulls last,
                 id desc
             limit 250;
             """;
@@ -91,8 +93,8 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.Add(new NpgsqlParameter("search", NpgsqlTypes.NpgsqlDbType.Text) { Value = (object?)NullIfWhiteSpace(search) ?? DBNull.Value });
         command.Parameters.Add(new NpgsqlParameter("estado", NpgsqlTypes.NpgsqlDbType.Text) { Value = (object?)NullIfWhiteSpace(estado) ?? DBNull.Value });
-        command.Parameters.AddWithValue("zone_id", (object?)zoneId ?? DBNull.Value);
-        command.Parameters.AddWithValue("assigned_user_id", (object?)assignedUserId ?? DBNull.Value);
+        command.Parameters.Add(new NpgsqlParameter("zone_id", NpgsqlTypes.NpgsqlDbType.Bigint) { Value = (object?)zoneId ?? DBNull.Value });
+        command.Parameters.Add(new NpgsqlParameter("assigned_user_id", NpgsqlTypes.NpgsqlDbType.Bigint) { Value = (object?)assignedUserId ?? DBNull.Value });
         command.Parameters.AddWithValue("invited_only", invitedOnly);
 
         var items = new List<OpportunityListItemDto>();
@@ -307,6 +309,141 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
             unmatchedCodes);
     }
 
+    public async Task<InvitationCodeVerificationResultDto> VerifyInvitationCodesAsync(
+        InvitationCodeVerificationRequest request,
+        SercopPublicClient sercopPublicClient,
+        SercopInvitationPublicClient invitationClient,
+        string invitedCompanyName,
+        string? invitedCompanyRuc,
+        int fallbackYear,
+        CancellationToken cancellationToken)
+    {
+        var codes = ParseCodes(request.CodesText);
+        var items = new List<InvitationCodeVerificationItemDto>(codes.Count);
+
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+
+        foreach (var code in codes)
+        {
+            try
+            {
+                var existing = await FindOpportunityForInvitationVerificationAsync(connection, code, cancellationToken);
+                ImportedOpportunityCandidate? imported = null;
+
+                if (existing is null)
+                {
+                    imported = await sercopPublicClient.ResolveByCodeAsync(code, fallbackYear, cancellationToken);
+                    if (imported is null)
+                    {
+                        items.Add(new InvitationCodeVerificationItemDto(
+                            code,
+                            false,
+                            false,
+                            false,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            "No se pudo resolver el proceso en SERCOP por codigo."));
+                        continue;
+                    }
+                }
+
+                var processCode = existing?.ProcessCode ?? imported!.ProcessCode;
+                var title = existing?.Title ?? imported!.Titulo;
+                var entity = existing?.Entity ?? imported!.Entidad;
+                var processType = existing?.ProcessType ?? imported!.Tipo;
+                var publishedAt = existing?.FechaPublicacion ?? imported!.FechaPublicacion;
+
+                var verification = await invitationClient.VerifyInvitationAsync(
+                    processCode,
+                    title,
+                    entity,
+                    processType,
+                    invitedCompanyName,
+                    invitedCompanyRuc,
+                    cancellationToken);
+
+                if (!verification.IsInvited)
+                {
+                    items.Add(new InvitationCodeVerificationItemDto(
+                        code,
+                        true,
+                        false,
+                        false,
+                        existing?.Id,
+                        verification.PublicProcessCode ?? processCode,
+                        publishedAt,
+                        verification.MatchedSupplierName,
+                        verification.EvidenceUrl,
+                        verification.Notes ?? "El reporte publico no confirmo invitacion para la empresa objetivo."));
+                    continue;
+                }
+
+                long? storedOpportunityId = existing?.Id;
+                if (existing is not null)
+                {
+                    await MarkInvitationAsync(
+                        connection,
+                        null,
+                        existing.Id,
+                        true,
+                        verification.MatchedSupplierName ?? invitedCompanyName,
+                        "reporte_publico_sercop",
+                        verification.EvidenceUrl,
+                        verification.Notes,
+                        DateTimeOffset.UtcNow,
+                        cancellationToken);
+                }
+                else
+                {
+                    storedOpportunityId = await UpsertImportedOpportunityAsync(
+                        connection,
+                        imported!,
+                        verification.MatchedSupplierName ?? invitedCompanyName,
+                        "reporte_publico_sercop",
+                        verification.EvidenceUrl,
+                        verification.Notes,
+                        cancellationToken);
+                }
+
+                items.Add(new InvitationCodeVerificationItemDto(
+                    code,
+                    true,
+                    true,
+                    true,
+                    storedOpportunityId,
+                    verification.PublicProcessCode ?? processCode,
+                    publishedAt,
+                    verification.MatchedSupplierName ?? invitedCompanyName,
+                    verification.EvidenceUrl,
+                    verification.Notes));
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "No se pudo verificar invitacion por codigo para {Code}", code);
+                items.Add(new InvitationCodeVerificationItemDto(
+                    code,
+                    false,
+                    false,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    exception.Message));
+            }
+        }
+
+        return new InvitationCodeVerificationResultDto(
+            codes.Count,
+            items.Count(item => item.IsInvited),
+            items.Count(item => item.StoredInCrm),
+            items);
+    }
+
     public async Task<InvitationSyncResultDto> SyncInvitationsFromPublicReportsAsync(
         SercopInvitationPublicClient invitationClient,
         string invitedCompanyName,
@@ -314,16 +451,47 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
         CancellationToken cancellationToken)
     {
         const string candidateSql = """
+            with deduped as (
+                select distinct on (upper(coalesce(nullif(process_code, ''), ocid_or_nic)))
+                    id,
+                    process_code,
+                    titulo,
+                    entidad,
+                    tipo,
+                    fecha_publicacion,
+                    fecha_limite,
+                    created_at,
+                    upper(coalesce(nullif(process_code, ''), ocid_or_nic)) as process_key
+                from opportunities
+                where not is_invited_match
+                order by
+                    upper(coalesce(nullif(process_code, ''), ocid_or_nic)),
+                    case
+                        when (fecha_publicacion at time zone 'America/Guayaquil')::date >= (now() at time zone 'America/Guayaquil')::date then 0
+                        else 1
+                    end,
+                    fecha_publicacion desc nulls last,
+                    fecha_limite asc nulls last,
+                    created_at desc,
+                    id desc
+            )
             select
                 id,
                 process_code,
                 titulo,
                 entidad,
                 tipo
-            from opportunities
-            where not is_invited_match
-            order by fecha_limite asc nulls last, created_at desc
-            limit 60;
+            from deduped
+            order by
+                case
+                    when (fecha_publicacion at time zone 'America/Guayaquil')::date >= (now() at time zone 'America/Guayaquil')::date then 0
+                    else 1
+                end,
+                fecha_limite asc nulls last,
+                fecha_publicacion desc nulls last,
+                created_at desc,
+                id desc
+            limit 120;
             """;
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -865,7 +1033,8 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
                 count(*) filter (where is_invited_match) as invited,
                 count(*) filter (where assigned_user_id is not null) as assigned,
                 count(*) filter (where assigned_user_id is null) as unassigned
-            from opportunities;
+            from opportunities
+            where (fecha_publicacion at time zone 'America/Guayaquil')::date >= (now() at time zone 'America/Guayaquil')::date;
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
@@ -886,6 +1055,7 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
         const string sql = """
             select coalesce(estado, 'sin_estado') as label, count(*) as count
             from opportunities
+            where (fecha_publicacion at time zone 'America/Guayaquil')::date >= (now() at time zone 'America/Guayaquil')::date
             group by coalesce(estado, 'sin_estado')
             order by count(*) desc, label asc;
             """;
@@ -910,7 +1080,9 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
                 z.name as zone_name,
                 count(o.id) as count
             from crm_zones z
-            left join opportunities o on o.zone_id = z.id
+            left join opportunities o
+                on o.zone_id = z.id
+               and (o.fecha_publicacion at time zone 'America/Guayaquil')::date >= (now() at time zone 'America/Guayaquil')::date
             group by z.id, z.name
             order by z.name asc;
             """;
@@ -1039,6 +1211,45 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
         command.Parameters.AddWithValue("code", code);
         var result = await command.ExecuteScalarAsync(cancellationToken);
         return result is null or DBNull ? null : Convert.ToInt64(result, CultureInfo.InvariantCulture);
+    }
+
+    private async Task<OpportunityInvitationLookup?> FindOpportunityForInvitationVerificationAsync(
+        NpgsqlConnection connection,
+        string code,
+        CancellationToken cancellationToken)
+    {
+        const string sql = """
+            select
+                id,
+                process_code,
+                titulo,
+                entidad,
+                tipo,
+                fecha_publicacion
+            from opportunities
+            where upper(coalesce(process_code, '')) = upper(@code)
+               or upper(ocid_or_nic) = upper(@code)
+               or upper(external_id) = upper(@code)
+            order by fecha_publicacion desc nulls last, id desc
+            limit 1;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("code", code);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+        {
+            return null;
+        }
+
+        return new OpportunityInvitationLookup(
+            GetInt64(reader, "id"),
+            GetString(reader, "process_code"),
+            GetString(reader, "titulo"),
+            GetNullableString(reader, "entidad"),
+            GetNullableString(reader, "tipo"),
+            GetNullableDateTimeOffset(reader, "fecha_publicacion"));
     }
 
     private async Task<long> UpsertImportedOpportunityAsync(
@@ -1274,6 +1485,14 @@ public sealed partial class CrmRepository(NpgsqlDataSource dataSource, ILogger<C
     }
 
     private sealed record InvitationSyncCandidate(long Id, string? ProcessCode, string Title, string? Entity, string? ProcessType);
+
+    private sealed record OpportunityInvitationLookup(
+        long Id,
+        string ProcessCode,
+        string Title,
+        string? Entity,
+        string? ProcessType,
+        DateTimeOffset? FechaPublicacion);
 
     private sealed class WorkflowNodeProjection
     {

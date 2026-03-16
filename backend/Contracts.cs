@@ -140,6 +140,30 @@ public sealed record BulkInvitationImportResultDto(
     IReadOnlyList<string> UnmatchedCodes
 );
 
+public sealed record InvitationCodeVerificationRequest(
+    string CodesText
+);
+
+public sealed record InvitationCodeVerificationItemDto(
+    string RequestedCode,
+    bool ProcessResolved,
+    bool IsInvited,
+    bool StoredInCrm,
+    long? OpportunityId,
+    string? ResolvedProcessCode,
+    DateTimeOffset? FechaPublicacion,
+    string? MatchedSupplierName,
+    string? EvidenceUrl,
+    string? Notes
+);
+
+public sealed record InvitationCodeVerificationResultDto(
+    int RequestedCount,
+    int VerifiedCount,
+    int StoredCount,
+    IReadOnlyList<InvitationCodeVerificationItemDto> Items
+);
+
 public sealed record InvitationSyncResultDto(
     int ScannedCount,
     int ConfirmedCount,
@@ -236,7 +260,11 @@ public sealed record AssistantAskRequest(
     string Question,
     string? Module,
     long? OpportunityId,
-    string? WorkflowId
+    string? WorkflowId,
+    string? FilePath,
+    string? Language,
+    string? Selection,
+    string? CodeContext
 );
 
 public sealed record AssistantSourceDto(
@@ -251,4 +279,123 @@ public sealed record AssistantReplyDto(
     string ContextSummary,
     string Answer,
     IReadOnlyList<AssistantSourceDto> Sources
+);
+
+public sealed record PersonalAssistantAskRequest(
+    string Question,
+    long? SessionId,
+    string? SearchMode,
+    string? FilePath,
+    string? Language,
+    string? Selection,
+    string? CodeContext
+);
+
+public sealed record PersonalAssistantUploadedDocumentDto(
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    int CharacterCount,
+    string DownloadUrl
+);
+
+public sealed record PersonalAssistantReplyDto(
+    long SessionId,
+    string SessionTitle,
+    string SearchMode,
+    bool UsedWebSearch,
+    int LearnedItems,
+    string Model,
+    string Answer,
+    IReadOnlyList<AssistantSourceDto> Sources,
+    IReadOnlyList<PersonalAssistantUploadedDocumentDto> UploadedDocuments
+);
+
+public sealed record PersonalAssistantSessionDto(
+    long Id,
+    string Title,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    int MessageCount
+);
+
+public sealed record PersonalAssistantMessageDto(
+    long Id,
+    string Role,
+    string Content,
+    string? Model,
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<AssistantSourceDto> Sources
+);
+
+public sealed record PersonalAssistantSessionDetailDto(
+    long Id,
+    string Title,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<PersonalAssistantMessageDto> Messages
+);
+
+public sealed record PersonalAssistantMemoryDto(
+    long Id,
+    string MemoryKind,
+    string Title,
+    string Content,
+    string SourceKind,
+    string? SourceUrl,
+    decimal Confidence,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? LastUsedAt,
+    IReadOnlyList<AssistantSourceDto> Sources
+);
+
+public sealed record StudioGenerateRequest(
+    string AssetScope,
+    long? OpportunityId,
+    string? WorkflowId,
+    string? Audience,
+    string? Tone,
+    string? Goal,
+    bool IncludeReport,
+    bool IncludeVideo,
+    bool RenderVideo
+);
+
+public sealed record StudioSceneDto(
+    int Order,
+    string Title,
+    string OverlayText,
+    string VisualBrief,
+    string Voiceover
+);
+
+public sealed record StudioAssetDto(
+    long Id,
+    string AssetType,
+    string AssetScope,
+    long? OpportunityId,
+    string? WorkflowId,
+    string Title,
+    string Format,
+    string? Audience,
+    string? Tone,
+    string ModelName,
+    string? ContentText,
+    string PayloadJson,
+    DateTimeOffset CreatedAt
+);
+
+public sealed record StudioGenerateResultDto(
+    string AssetScope,
+    string Model,
+    string ContextSummary,
+    string? ReportMarkdown,
+    string? VideoHeadline,
+    string? VideoHook,
+    string? VideoVoiceover,
+    string? StoryboardMarkdown,
+    string? CaptionsSrt,
+    long? RenderedVideoAssetId,
+    IReadOnlyList<StudioSceneDto> Scenes,
+    IReadOnlyList<StudioAssetDto> SavedAssets
 );

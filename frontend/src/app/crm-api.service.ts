@@ -14,6 +14,9 @@ import {
   OpportunityDetail,
   OpportunityInvitationUpdateRequest,
   OpportunityListItem,
+  StudioAsset,
+  StudioGenerateRequest,
+  StudioGenerateResult,
   User,
   UserUpsertRequest,
   WorkflowDetail,
@@ -143,5 +146,35 @@ export class CrmApiService {
 
   askAssistant(payload: AssistantAskRequest) {
     return this.http.post<AssistantReply>(`${this.baseUrl}/assistant/ask`, payload);
+  }
+
+  getStudioAssets(filters: {
+    assetScope?: 'dashboard' | 'opportunity' | 'workflow';
+    opportunityId?: number | null;
+    workflowId?: string | null;
+  }) {
+    let params = new HttpParams();
+
+    if (filters.assetScope) {
+      params = params.set('assetScope', filters.assetScope);
+    }
+
+    if (filters.opportunityId) {
+      params = params.set('opportunityId', filters.opportunityId);
+    }
+
+    if (filters.workflowId) {
+      params = params.set('workflowId', filters.workflowId);
+    }
+
+    return this.http.get<StudioAsset[]>(`${this.baseUrl}/studio/assets`, { params });
+  }
+
+  getStudioAsset(id: number) {
+    return this.http.get<StudioAsset>(`${this.baseUrl}/studio/assets/${id}`);
+  }
+
+  generateStudioContent(payload: StudioGenerateRequest) {
+    return this.http.post<StudioGenerateResult>(`${this.baseUrl}/studio/generate`, payload);
   }
 }

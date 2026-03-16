@@ -1,0 +1,72 @@
+{
+  "name": "sercop-assistant-vscode",
+  "displayName": "SERCOP Assistant",
+  "description": "Consulta el asistente del proyecto SERCOP CRM desde Visual Studio Code.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:sercopAssistant.askQuestion",
+    "onCommand:sercopAssistant.explainSelection",
+    "onCommand:sercopAssistant.improveSelection",
+    "onCommand:sercopAssistant.fixSelection"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sercopAssistant.askQuestion",
+        "title": "SERCOP Assistant: Ask Project Question"
+      },
+      {
+        "command": "sercopAssistant.explainSelection",
+        "title": "SERCOP Assistant: Explain Selection"
+      },
+      {
+        "command": "sercopAssistant.improveSelection",
+        "title": "SERCOP Assistant: Improve Selection"
+      },
+      {
+        "command": "sercopAssistant.fixSelection",
+        "title": "SERCOP Assistant: Review Selection For Bugs"
+      }
+    ],
+    "configuration": {
+      "title": "SERCOP Assistant",
+      "properties": {
+        "sercopAssistant.baseUrl": {
+          "type": "string",
+          "default": "http://localhost:5050",
+          "description": "URL base del API que expone /api/personal-ai/ask."
+        },
+        "sercopAssistant.username": {
+          "type": "string",
+          "default": "admin",
+          "description": "Usuario de autenticacion Basic del CRM."
+        },
+        "sercopAssistant.password": {
+          "type": "string",
+          "default": "",
+          "description": "Clave de autenticacion Basic del CRM."
+        },
+        "sercopAssistant.includeEntireFileWhenNoSelection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Si no hay seleccion, envia un fragmento del archivo activo."
+        },
+        "sercopAssistant.maxContextCharacters": {
+          "type": "number",
+          "default": 6000,
+          "minimum": 500,
+          "maximum": 20000,
+          "description": "Cantidad maxima de caracteres del archivo activo que se envia al asistente."
+        }
+      }
+    }
+  }
+}

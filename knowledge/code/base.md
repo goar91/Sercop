@@ -3,9 +3,10 @@
 Proyecto local con n8n, PostgreSQL, Qdrant, Ollama y ngrok.
 
 Modelos:
-- qwen3:0.6b para analisis general en esta maquina.
-- qwen2.5-coder:0.5b para soporte de programacion en esta maquina.
+- qwen2.5:7b para analisis general local.
+- qwen2.5-coder:7b para soporte de programacion local.
 - nomic-embed-text para embeddings.
+- Soporte opcional para OpenAI mediante `AI_PROVIDER=openai` y modelos `gpt-5`.
 
 Servicios:
 - n8n en localhost:5678.
@@ -15,5 +16,5 @@ Servicios:
 
 
 Nota operativa:
-- Los webhooks de chat estan respondiendo con RAG + reglas porque la inferencia local de Ollama supera el tiempo razonable en este PC.
+- El asistente del CRM consulta tambien una base vectorial con fragmentos reales del repositorio para responder sobre arquitectura, scripts y codigo.
 

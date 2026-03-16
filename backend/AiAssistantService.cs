@@ -20,10 +20,10 @@ public sealed class AiAssistantService(
         }
 
         var module = NormalizeModule(request.Module, request.OpportunityId, request.WorkflowId);
-        var context = await BuildContextAsync(module, request.OpportunityId, request.WorkflowId, cancellationToken);
-        var sources = await LoadKnowledgeAsync(module, question, cancellationToken);
+        var context = await BuildContextAsync(module, request, cancellationToken);
+        var sources = await LoadKnowledgeAsync(module, BuildRetrievalQuery(module, question, request), cancellationToken);
         var model = ChooseModel(module, question);
-        var prompt = BuildPrompt(module, question, context.Summary, context.PayloadJson, sources);
+        var prompt = BuildPrompt(module, question, context, request, sources);
         var generation = await GenerateWithFallbackAsync(model, prompt, cancellationToken);
 
         return new AssistantReplyDto(
@@ -34,33 +34,36 @@ public sealed class AiAssistantService(
             sources.Select(source => new AssistantSourceDto(source.Label, source.Reference, source.Kind)).ToList());
     }
 
-    private async Task<(string Summary, string PayloadJson)> BuildContextAsync(
+    private async Task<AssistantContext> BuildContextAsync(
         string module,
-        long? opportunityId,
-        string? workflowId,
+        AssistantAskRequest request,
         CancellationToken cancellationToken)
     {
         var dashboard = await repository.GetDashboardAsync(cancellationToken);
 
         object payload = module switch
         {
-            "opportunities" => await BuildOpportunityContextAsync(dashboard, opportunityId, cancellationToken),
-            "workflows" => await BuildWorkflowContextAsync(dashboard, workflowId, cancellationToken),
+            "opportunities" => await BuildOpportunityContextAsync(dashboard, request.OpportunityId, cancellationToken),
+            "workflows" => await BuildWorkflowContextAsync(dashboard, request.WorkflowId, cancellationToken),
             "keywords" => await BuildKeywordContextAsync(dashboard, cancellationToken),
             "config" => await BuildConfigContextAsync(dashboard, cancellationToken),
+            "code" => await BuildCodeContextAsync(dashboard, request, cancellationToken),
             _ => await BuildDashboardContextAsync(dashboard, cancellationToken)
         };
 
         var summary = module switch
         {
-            "opportunities" => opportunityId is null ? "Analisis del pipeline comercial." : $"Analisis de la oportunidad {opportunityId.Value}.",
-            "workflows" => string.IsNullOrWhiteSpace(workflowId) ? "Analisis operativo de workflows." : $"Analisis del workflow {workflowId}.",
+            "opportunities" => request.OpportunityId is null ? "Analisis del pipeline comercial." : $"Analisis de la oportunidad {request.OpportunityId.Value}.",
+            "workflows" => string.IsNullOrWhiteSpace(request.WorkflowId) ? "Analisis operativo de workflows." : $"Analisis del workflow {request.WorkflowId}.",
             "keywords" => "Analisis de reglas de palabras clave.",
             "config" => "Analisis de configuracion comercial y operativa.",
+            "code" => string.IsNullOrWhiteSpace(request.FilePath)
+                ? "Analisis tecnico del repositorio y su arquitectura."
+                : $"Analisis tecnico del archivo {Path.GetFileName(request.FilePath)}.",
             _ => "Analisis del tablero general del CRM."
         };
 
-        return (summary, JsonSerializer.Serialize(payload, JsonOptions));
+        return new AssistantContext(summary, JsonSerializer.Serialize(payload, JsonOptions));
     }
 
     private async Task<object> BuildDashboardContextAsync(DashboardSummaryDto dashboard, CancellationToken cancellationToken)
@@ -181,22 +184,89 @@ public sealed class AiAssistantService(
         };
     }
 
-    private async Task<List<KnowledgeSource>> LoadKnowledgeAsync(string module, string question, CancellationToken cancellationToken)
+    private async Task<object> BuildCodeContextAsync(
+        DashboardSummaryDto dashboard,
+        AssistantAskRequest request,
+        CancellationToken cancellationToken)
     {
-        var vector = await EmbedAsync(question, cancellationToken);
-        var orderedCollections = module == "workflows" ? new[] { "code_kb", "sercop_docs" } : new[] { "sercop_docs", "code_kb" };
+        var workflows = await repository.GetWorkflowsAsync(cancellationToken);
+        var filePreview = TryLoadFilePreview(request.FilePath, request.CodeContext, request.Selection);
+
+        return new
+        {
+            dashboard,
+            code = new
+            {
+                request.FilePath,
+                request.Language,
+                hasSelection = !string.IsNullOrWhiteSpace(request.Selection),
+                selection = Truncate(request.Selection, 1800),
+                context = Truncate(filePreview, 5000)
+            },
+            workflows = workflows.Take(6).Select(workflow => new
+            {
+                workflow.Id,
+                workflow.Name,
+                workflow.Active,
+                workflow.NodeCount
+            }),
+            projectAreas = new[]
+            {
+                "backend ASP.NET Core",
+                "frontend Angular",
+                "scripts PowerShell",
+                "workflows n8n",
+                "vector DB en Qdrant",
+                "modelos en Ollama"
+            }
+        };
+    }
+
+    private async Task<List<KnowledgeSource>> LoadKnowledgeAsync(string module, string retrievalQuery, CancellationToken cancellationToken)
+    {
+        var vector = await EmbedAsync(retrievalQuery, cancellationToken);
         var sources = new List<KnowledgeSource>();
 
-        foreach (var collection in orderedCollections)
+        foreach (var collection in GetKnowledgeCollections(module))
         {
-            sources.AddRange(await QueryCollectionAsync(collection, vector, cancellationToken));
+            sources.AddRange(await QueryCollectionAsync(collection, vector, GetKnowledgeLimit(collection, module), cancellationToken));
         }
 
         return sources
             .GroupBy(source => source.Reference, StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
-            .Take(4)
+            .Take(6)
             .ToList();
+    }
+
+    private static string BuildRetrievalQuery(string module, string question, AssistantAskRequest request)
+    {
+        var parts = new List<string>
+        {
+            module,
+            question
+        };
+
+        if (!string.IsNullOrWhiteSpace(request.FilePath))
+        {
+            parts.Add(request.FilePath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Language))
+        {
+            parts.Add(request.Language);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Selection))
+        {
+            parts.Add(Truncate(request.Selection, 600));
+        }
+        else if (!string.IsNullOrWhiteSpace(request.CodeContext))
+        {
+            parts.Add(Truncate(request.CodeContext, 600));
+        }
+
+        return string.Join(Environment.NewLine, parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
     private async Task<float[]> EmbedAsync(string input, CancellationToken cancellationToken)
@@ -215,9 +285,9 @@ public sealed class AiAssistantService(
         return embedding;
     }
 
-    private async Task<List<KnowledgeSource>> QueryCollectionAsync(string collection, float[] vector, CancellationToken cancellationToken)
+    private async Task<List<KnowledgeSource>> QueryCollectionAsync(string collection, float[] vector, int limit, CancellationToken cancellationToken)
     {
-        var payload = JsonSerializer.Serialize(new { query = vector, limit = 2, with_payload = true });
+        var payload = JsonSerializer.Serialize(new { query = vector, limit, with_payload = true });
         using var response = await httpClient.PostAsync(
             $"{GetQdrantBaseUrl().TrimEnd('/')}/collections/{collection}/points/query",
             new ByteArrayContent(Encoding.UTF8.GetBytes(payload)) { Headers = { ContentType = new("application/json") } },
@@ -242,7 +312,11 @@ public sealed class AiAssistantService(
                 continue;
             }
 
-            items.Add(new KnowledgeSource(Path.GetFileName(reference), reference, collection, Condense(text)));
+            items.Add(new KnowledgeSource(
+                payloadElement.TryGetProperty("reference", out var referenceName) ? referenceName.GetString() ?? Path.GetFileName(reference) : Path.GetFileName(reference),
+                reference,
+                collection,
+                Truncate(Condense(text), 900)));
         }
 
         return items;
@@ -256,9 +330,9 @@ public sealed class AiAssistantService(
             return (primaryModel, primaryAnswer);
         }
 
-        var fallbackModel = primaryModel == (configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:0.5b")
-            ? configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen3:0.6b"
-            : configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:0.5b";
+        var fallbackModel = primaryModel == GetCodeModel()
+            ? GetGeneralModel()
+            : GetCodeModel();
 
         if (string.Equals(primaryModel, fallbackModel, StringComparison.OrdinalIgnoreCase))
         {
@@ -272,6 +346,11 @@ public sealed class AiAssistantService(
     }
 
     private async Task<string> GenerateAsync(string model, string prompt, CancellationToken cancellationToken)
+        => UseOpenAi()
+            ? await GenerateWithOpenAiAsync(model, prompt, cancellationToken)
+            : await GenerateWithOllamaAsync(model, prompt, cancellationToken);
+
+    private async Task<string> GenerateWithOllamaAsync(string model, string prompt, CancellationToken cancellationToken)
     {
         var payload = JsonSerializer.Serialize(new
         {
@@ -280,8 +359,8 @@ public sealed class AiAssistantService(
             stream = false,
             options = new
             {
-                temperature = 0.2,
-                num_predict = 260
+                temperature = model == GetCodeModel() ? 0.12 : 0.2,
+                num_predict = model == GetCodeModel() ? 420 : 320
             }
         });
 
@@ -297,33 +376,70 @@ public sealed class AiAssistantService(
         return CleanAnswer(answer);
     }
 
-    private static string BuildPrompt(string module, string question, string summary, string contextJson, IReadOnlyList<KnowledgeSource> sources)
+    private async Task<string> GenerateWithOpenAiAsync(string model, string prompt, CancellationToken cancellationToken)
+    {
+        var apiKey = configuration["OPENAI_API_KEY"];
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            throw new InvalidOperationException("OPENAI_API_KEY no esta configurada.");
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{GetOpenAiBaseUrl().TrimEnd('/')}/responses");
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+        request.Content = new StringContent(JsonSerializer.Serialize(new
+        {
+            model,
+            input = prompt,
+            max_output_tokens = 700
+        }), Encoding.UTF8, "application/json");
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return CleanAnswer(TryExtractOpenAiOutput(document.RootElement));
+    }
+
+    private static string BuildPrompt(
+        string module,
+        string question,
+        AssistantContext context,
+        AssistantAskRequest request,
+        IReadOnlyList<KnowledgeSource> sources)
     {
         var knowledgeBlock = sources.Count == 0
             ? "Sin fragmentos adicionales de la base de conocimiento."
             : string.Join(Environment.NewLine + Environment.NewLine, sources.Select((source, index) =>
                 $"Fuente {index + 1}: {source.Reference}{Environment.NewLine}{source.Snippet}"));
 
+        var codeBlock = module == "code"
+            ? $$"""
+                Contexto de codigo:
+                Archivo activo: {{request.FilePath ?? "no informado"}}
+                Lenguaje: {{request.Language ?? "no informado"}}
+                Seleccion:
+                {{Truncate(request.Selection, 1800)}}
+
+                Contexto ampliado:
+                {{Truncate(request.CodeContext, 5000)}}
+                """
+            : string.Empty;
+
         return $$"""
-            Eres el copiloto de un CRM de licitaciones SERCOP.
+            Eres el copiloto principal del proyecto SERCOP CRM.
             Responde solo en espanol.
             Usa el contexto del CRM y las fuentes recuperadas.
-            Si falta informacion, dilo de forma directa.
-            Prioriza respuestas practicas para operar el proyecto.
-            Responde en maximo 120 palabras.
-            Estructura la respuesta en:
-            Resumen:
-            Acciones:
-            Riesgos u observaciones:
-            Usa maximo 3 acciones y 2 observaciones.
+            {{BuildPromptInstructions(module)}}
             No uses etiquetas <think>, no expliques razonamiento interno y no repitas estas instrucciones.
 
             Modulo activo: {{module}}
-            Contexto breve: {{summary}}
+            Contexto breve: {{context.Summary}}
             Pregunta del usuario: {{question}}
 
             Contexto estructurado del CRM:
-            {{contextJson}}
+            {{context.PayloadJson}}
+
+            {{codeBlock}}
 
             Fragmentos recuperados:
             {{knowledgeBlock}}
@@ -332,18 +448,21 @@ public sealed class AiAssistantService(
 
     private string ChooseModel(string module, string question)
     {
-        var isTechnical =
+        var isTechnical = module == "code" ||
             question.Contains("docker", StringComparison.OrdinalIgnoreCase)
             || question.Contains("compose", StringComparison.OrdinalIgnoreCase)
             || question.Contains("codigo", StringComparison.OrdinalIgnoreCase)
+            || question.Contains("code", StringComparison.OrdinalIgnoreCase)
             || question.Contains("c#", StringComparison.OrdinalIgnoreCase)
+            || question.Contains("typescript", StringComparison.OrdinalIgnoreCase)
+            || question.Contains("angular", StringComparison.OrdinalIgnoreCase)
             || question.Contains("script", StringComparison.OrdinalIgnoreCase)
             || question.Contains("api", StringComparison.OrdinalIgnoreCase)
             || question.Contains("endpoint", StringComparison.OrdinalIgnoreCase);
 
         return isTechnical
-            ? configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:0.5b"
-            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen3:0.6b";
+            ? GetCodeModel()
+            : GetGeneralModel();
     }
 
     private static string NormalizeModule(string? module, long? opportunityId, string? workflowId)
@@ -353,6 +472,7 @@ public sealed class AiAssistantService(
             "workflow" or "workflows" => "workflows",
             "keyword" or "keywords" => "keywords",
             "config" or "configuration" or "users" or "zones" => "config",
+            "code" or "coding" or "programming" or "development" => "code",
             "dashboard" => "dashboard",
             _ when opportunityId is not null => "opportunities",
             _ when !string.IsNullOrWhiteSpace(workflowId) => "workflows",
@@ -365,8 +485,138 @@ public sealed class AiAssistantService(
     private string GetQdrantBaseUrl()
         => configuration["QDRANT_API_BASE_URL"] ?? "http://localhost:6333";
 
+    private string GetOpenAiBaseUrl()
+        => configuration["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1";
+
+    private string GetGeneralModel()
+        => UseOpenAi()
+            ? configuration["OPENAI_GENERAL_MODEL"] ?? "gpt-5.2"
+            : configuration["OLLAMA_GENERAL_MODEL"] ?? "qwen2.5:7b";
+
+    private string GetCodeModel()
+        => UseOpenAi()
+            ? configuration["OPENAI_CODE_MODEL"] ?? "gpt-5.2-codex"
+            : configuration["OLLAMA_CODE_MODEL"] ?? "qwen2.5-coder:7b";
+
+    private bool UseOpenAi()
+        => string.Equals(configuration["AI_PROVIDER"], "openai", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(configuration["OPENAI_API_KEY"]);
+
+    private static IReadOnlyList<string> GetKnowledgeCollections(string module)
+        => module switch
+        {
+            "code" => ["repo_code", "code_kb", "sercop_docs"],
+            "workflows" => ["repo_code", "code_kb", "sercop_docs"],
+            _ => ["sercop_docs", "repo_code", "code_kb"]
+        };
+
+    private static int GetKnowledgeLimit(string collection, string module)
+        => (module, collection) switch
+        {
+            ("code", "repo_code") => 4,
+            ("workflows", "repo_code") => 3,
+            (_, "sercop_docs") => 2,
+            _ => 2
+        };
+
+    private static string BuildPromptInstructions(string module)
+        => module switch
+        {
+            "code" => "Trabaja solo con evidencia del contexto y de las fuentes recuperadas. No inventes problemas genericos de seguridad, rendimiento o escalabilidad. Si falta evidencia, dilo de forma explicita. Usa los encabezados Diagnostico, Cambios concretos y Siguientes pasos. Si das codigo, mantenlo pequeno y aplicable.",
+            "workflows" => "Explica objetivos operativos, cuellos de botella y mejoras concretas de automatizacion. No inventes riesgos que no aparezcan en el contexto. Responde en maximo 180 palabras y usa los encabezados Resumen, Acciones y Riesgos u observaciones.",
+            _ => "Prioriza respuestas practicas para operar el proyecto. No inventes riesgos o estados no sustentados por el contexto. Responde en maximo 160 palabras y usa los encabezados Resumen, Acciones y Riesgos u observaciones."
+        };
+
     private static string Condense(string value)
         => value.Replace("\r", " ").Replace("\n", " ").Trim();
+
+    private static string? TryExtractOpenAiOutput(JsonElement root)
+    {
+        if (root.TryGetProperty("output_text", out var outputText) && outputText.ValueKind == JsonValueKind.String)
+        {
+            return outputText.GetString();
+        }
+
+        if (!root.TryGetProperty("output", out var outputArray) || outputArray.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var parts = new List<string>();
+        foreach (var item in outputArray.EnumerateArray())
+        {
+            if (!item.TryGetProperty("content", out var contentArray) || contentArray.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var content in contentArray.EnumerateArray())
+            {
+                if (!content.TryGetProperty("text", out var textElement))
+                {
+                    continue;
+                }
+
+                if (textElement.ValueKind == JsonValueKind.String)
+                {
+                    parts.Add(textElement.GetString() ?? string.Empty);
+                    continue;
+                }
+
+                if (textElement.ValueKind == JsonValueKind.Object && textElement.TryGetProperty("value", out var textValue))
+                {
+                    parts.Add(textValue.GetString() ?? string.Empty);
+                }
+            }
+        }
+
+        return parts.Count == 0 ? null : string.Join(Environment.NewLine, parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private static string? TryLoadFilePreview(string? filePath, string? codeContext, string? selection)
+    {
+        if (!string.IsNullOrWhiteSpace(codeContext))
+        {
+            return codeContext;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selection))
+        {
+            return selection;
+        }
+
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var projectRoot = Path.GetFullPath(Directory.GetCurrentDirectory());
+            var fullPath = Path.GetFullPath(filePath);
+            if (!fullPath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase) || !File.Exists(fullPath))
+            {
+                return null;
+            }
+
+            return File.ReadAllText(fullPath);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : $"{trimmed[..maxLength]}...";
+    }
 
     private static string CleanAnswer(string? answer)
     {
@@ -376,12 +626,16 @@ public sealed class AiAssistantService(
         }
 
         var cleaned = Regex.Replace(answer, "<think>[\\s\\S]*?</think>", string.Empty, RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, "^(respuesta|output)\\s*:\\s*", string.Empty, RegexOptions.IgnoreCase);
         cleaned = Regex.Replace(cleaned, @"\n{3,}", "\n\n");
         return cleaned.Trim();
     }
 
     private static bool IsUsefulAnswer(string answer)
-        => !string.IsNullOrWhiteSpace(answer) && answer.Length >= 12 && !string.Equals(answer, "No hubo respuesta util del modelo local.", StringComparison.Ordinal);
+        => !string.IsNullOrWhiteSpace(answer)
+            && answer.Length >= 40
+            && !string.Equals(answer, "No hubo respuesta util del modelo local.", StringComparison.Ordinal);
 
+    private sealed record AssistantContext(string Summary, string PayloadJson);
     private sealed record KnowledgeSource(string Label, string Reference, string Kind, string Snippet);
 }

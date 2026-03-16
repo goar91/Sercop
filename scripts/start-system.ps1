@@ -15,6 +15,14 @@ $envFile = Join-Path $root '.env'
 $frontendIndex = Join-Path $root 'frontend\dist\frontend\browser\index.html'
 $backendDll = Join-Path $root 'backend\bin\Debug\net10.0\backend.dll'
 
+function Assert-LastExitCode {
+    param([string]$Action)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Action fallo con codigo de salida $LASTEXITCODE."
+    }
+}
+
 function Test-IsAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
@@ -463,21 +471,25 @@ try {
     if ($Build -or -not (Test-Path $frontendIndex) -or -not (Test-Path $backendDll)) {
         Write-Host 'Compilando CRM antes de iniciar...'
         powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts\build-crm.ps1')
+        Assert-LastExitCode -Action 'La compilacion del CRM'
     }
 
     if (-not $SkipDocker) {
         Write-Host 'Iniciando servicios Docker: qdrant, ollama, mailpit y n8n...'
         docker compose up -d qdrant ollama mailpit n8n
+        Assert-LastExitCode -Action 'El arranque de servicios Docker'
 
         $hasNgrokToken = $config.ContainsKey('NGROK_AUTHTOKEN') -and -not [string]::IsNullOrWhiteSpace($config['NGROK_AUTHTOKEN'])
         if (-not $SkipNgrok -and $hasNgrokToken) {
             Write-Host 'Iniciando tunel ngrok...'
             docker compose --profile tunnel up -d ngrok
+            Assert-LastExitCode -Action 'El arranque del tunel ngrok'
         }
 
         if (Wait-HttpEndpoint -Uri "http://localhost:$n8nPort" -TimeoutSeconds 90) {
             Write-Host 'Sincronizando workflows de n8n...'
             powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'scripts\import-workflows.ps1')
+            Assert-LastExitCode -Action 'La sincronizacion de workflows de n8n'
         }
         else {
             Write-Warning 'n8n no respondio a tiempo para sincronizar workflows automaticamente.'

@@ -59,6 +59,13 @@ Solucion local para monitorear procesos del SERCOP, confirmar invitaciones a HDM
 
 - Verificacion general:
   - `powershell -ExecutionPolicy Bypass -File scripts\verify-stack.ps1 -Live`
+- Inicializar la base vectorial de IA:
+  - `powershell -ExecutionPolicy Bypass -File scripts\init-qdrant.ps1`
+  - `powershell -ExecutionPolicy Bypass -File scripts\load-kb.ps1 -Collection sercop_docs -Folder .\knowledge\sercop`
+  - `powershell -ExecutionPolicy Bypass -File scripts\load-kb.ps1 -Collection code_kb -Folder .\knowledge\code`
+  - `powershell -ExecutionPolicy Bypass -File scripts\load-repo-kb.ps1`
+- Descargar modelos configurados:
+  - `powershell -ExecutionPolicy Bypass -File scripts\pull-models.ps1`
 - Build CRM:
   - `powershell -ExecutionPolicy Bypass -File scripts\build-crm.ps1`
 - Iniciar stack completo:
@@ -76,3 +83,10 @@ Solucion local para monitorear procesos del SERCOP, confirmar invitaciones a HDM
 - Importacion de workflows: `docs\workflow-import.md`
 - Operacion sin Google: `docs\no-google-options.md`
 - Arquitectura general: `docs\architecture.md`
+
+## IA y VS Code
+
+- El asistente del CRM ya consulta `sercop_docs`, `code_kb` y `repo_code`.
+- Para una version local mas fuerte, el `.env` ahora usa `qwen2.5:7b` y `qwen2.5-coder:7b`.
+- Si quieres una IA remota mas potente, configura `AI_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENAI_GENERAL_MODEL=gpt-5.2` y `OPENAI_CODE_MODEL=gpt-5.2-codex`.
+- La extension local de VS Code vive en `tools\vscode-sercop-assistant\` y consume el endpoint `/api/assistant/ask`.

@@ -5,7 +5,6 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { CrmApiService } from './crm-api.service';
 import {
-  AssistantReply,
   BulkInvitationImportResult,
   DashboardSummary,
   InvitationSyncResult,
@@ -13,13 +12,15 @@ import {
   MetaInfo,
   OpportunityDetail,
   OpportunityListItem,
+  StudioAsset,
+  StudioGenerateResult,
   User,
   WorkflowDetail,
   WorkflowSummary,
   Zone,
 } from './models';
 
-type Workspace = 'pipeline' | 'workflows' | 'config';
+type Workspace = 'pipeline' | 'workflows' | 'config' | 'studio';
 
 @Component({
   selector: 'app-root',
@@ -44,75 +45,39 @@ export class App {
   protected readonly selectedWorkflowId = signal<string | null>(null);
   protected readonly selectedWorkflow = signal<WorkflowDetail | null>(null);
   protected readonly activeWorkspace = signal<Workspace>('pipeline');
-  protected readonly assistantReply = signal<AssistantReply | null>(null);
-  protected readonly assistantLoading = signal(false);
-  protected readonly assistantError = signal('');
-  protected readonly assistantModule = computed(() => {
+  protected readonly workspaceCopy = computed(() => {
     switch (this.activeWorkspace()) {
       case 'workflows':
-        return 'workflows';
+        return {
+          label: 'Automatizaciones',
+          title: 'Control de workflows y nodos',
+          description: 'Revisa flujos n8n importados, su estado operativo y la disposicion visual de sus nodos.',
+        };
       case 'config':
-        return 'config';
+        return {
+          label: 'Configuracion',
+          title: 'Operaciones, usuarios y reglas',
+          description: 'Administra zonas, equipo comercial, importaciones de invitaciones y criterios de filtrado.',
+        };
+      case 'studio':
+        return {
+          label: 'Studio',
+          title: 'Reportes ejecutivos y piezas de video',
+          description: 'Genera paquetes de reporte, storyboard y video a partir del dashboard, un proceso o un workflow.',
+        };
+      case 'pipeline':
       default:
-        return this.selectedOpportunityId() ? 'opportunities' : 'dashboard';
+        return {
+          label: 'Radar comercial',
+          title: 'Pipeline de procesos recientes',
+          description: 'Filtra procesos publicados desde hoy, asigna responsables y concentra el analisis comercial en una sola vista.',
+        };
     }
   });
-  protected readonly assistantModuleLabel = computed(() => {
-    switch (this.assistantModule()) {
-      case 'workflows':
-        return 'Automatizaciones';
-      case 'config':
-        return 'Configuracion';
-      case 'opportunities':
-        return 'Pipeline';
-      default:
-        return 'Dashboard';
-    }
-  });
-  protected readonly assistantContextHint = computed(() => {
-    switch (this.assistantModule()) {
-      case 'workflows':
-        return this.selectedWorkflow()
-          ? `Workflow activo: ${this.selectedWorkflow()?.name}`
-          : 'Selecciona un workflow o pide un diagnostico de automatizacion.';
-      case 'config':
-        return 'Revisa zonas, usuarios, reglas y forma de operar el CRM.';
-      case 'opportunities':
-        return this.selectedOpportunity()
-          ? `Proceso activo: ${this.selectedOpportunity()?.processCode || this.selectedOpportunity()?.ocidOrNic}`
-          : 'Selecciona un proceso o pregunta por el estado del pipeline.';
-      default:
-        return 'Pide un resumen ejecutivo, prioridades o acciones recomendadas.';
-    }
-  });
-  protected readonly assistantQuickPrompts = computed(() => {
-    switch (this.assistantModule()) {
-      case 'workflows':
-        return [
-          'Explica este workflow y su objetivo operativo.',
-          'Que riesgos o cuellos de botella ves en esta automatizacion?',
-          'Que automatizacion adicional haria mas competitivo este sistema?',
-        ];
-      case 'config':
-        return [
-          'Que falta configurar para operar mejor el CRM?',
-          'Revisa usuarios, zonas y reglas y dime que falta.',
-          'Que cambios harian mas competitivo este proyecto?',
-        ];
-      case 'opportunities':
-        return [
-          'Resume este proceso y dime si conviene revisarlo con prioridad.',
-          'Que debo validar antes de asignar este proceso?',
-          'Lista riesgos, faltantes y siguientes pasos para esta oportunidad.',
-        ];
-      default:
-        return [
-          'Dame un resumen ejecutivo del tablero actual.',
-          'Cuales son las prioridades operativas inmediatas?',
-          'Que mejoras de producto y negocio deberiamos implementar?',
-        ];
-    }
-  });
+  protected readonly studioAssets = signal<StudioAsset[]>([]);
+  protected readonly selectedStudioAssetId = signal<number | null>(null);
+  protected readonly selectedStudioAsset = signal<StudioAsset | null>(null);
+  protected readonly studioResult = signal<StudioGenerateResult | null>(null);
   protected readonly filteredKeywordRules = computed(() => {
     const search = this.keywordListFilters.search.trim().toLowerCase();
     const type = this.keywordListFilters.ruleType;
@@ -185,6 +150,8 @@ export class App {
   protected readonly loading = signal(false);
   protected readonly detailLoading = signal(false);
   protected readonly workflowLoading = signal(false);
+  protected readonly studioLoading = signal(false);
+  protected readonly studioGenerating = signal(false);
   protected readonly savingAssignment = signal(false);
   protected readonly savingInvitation = signal(false);
   protected readonly importingInvitations = signal(false);
@@ -256,8 +223,14 @@ export class App {
     invitationNotes: '',
   };
 
-  protected assistantForm = {
-    question: '',
+  protected studioForm = {
+    assetScope: 'dashboard' as 'dashboard' | 'opportunity' | 'workflow',
+    audience: 'gerencia',
+    tone: 'ejecutivo',
+    goal: 'Resumir estado, riesgos y propuesta de valor del proyecto.',
+    includeReport: true,
+    includeVideo: true,
+    renderVideo: true,
   };
 
   protected keywordListFilters = {
@@ -299,6 +272,7 @@ export class App {
 
       await this.ensureSelectedWorkflow(workflowSummaries);
       await this.syncOpportunitySelection(opportunities, false);
+      await this.refreshStudioAssets(false);
     } catch (error) {
       this.handleError(error, 'No se pudo cargar el CRM.');
     } finally {
@@ -352,6 +326,10 @@ export class App {
         invitationEvidenceUrl: detail.invitationEvidenceUrl ?? '',
         invitationNotes: detail.invitationNotes ?? '',
       };
+
+      if (this.studioForm.assetScope === 'opportunity') {
+        void this.refreshStudioAssets(false);
+      }
     } catch (error) {
       this.handleError(error, 'No se pudo cargar el detalle del proceso.');
     } finally {
@@ -646,48 +624,84 @@ export class App {
 
   protected activateWorkspace(workspace: Workspace): void {
     this.activeWorkspace.set(workspace);
-  }
-
-  protected async askAssistant(): Promise<void> {
-    const question = this.assistantForm.question.trim();
-    if (!question) {
-      return;
+    if (workspace === 'studio') {
+      void this.refreshStudioAssets();
     }
-
-    this.assistantLoading.set(true);
-    this.assistantError.set('');
-
-    try {
-      const reply = await firstValueFrom(this.api.askAssistant({
-        question,
-        module: this.assistantModule(),
-        opportunityId: this.selectedOpportunityId(),
-        workflowId: this.selectedWorkflowId(),
-      }));
-
-      this.assistantReply.set(reply);
-    } catch (error) {
-      this.assistantError.set(this.resolveErrorMessage(error, 'No se pudo consultar al asistente.'));
-    } finally {
-      this.assistantLoading.set(false);
-    }
-  }
-
-  protected askQuickPrompt(prompt: string): void {
-    this.assistantForm.question = prompt;
-    void this.askAssistant();
-  }
-
-  protected clearAssistant(): void {
-    this.assistantForm.question = '';
-    this.assistantReply.set(null);
-    this.assistantError.set('');
   }
 
   protected async selectWorkflow(id: string): Promise<void> {
     this.activeWorkspace.set('workflows');
     this.selectedWorkflowId.set(id);
     await this.loadWorkflowDetail(id);
+    if (this.studioForm.assetScope === 'workflow') {
+      await this.refreshStudioAssets(false);
+    }
+  }
+
+  protected async refreshStudioAssets(showLoading = true): Promise<void> {
+    if (showLoading) {
+      this.studioLoading.set(true);
+    }
+
+    try {
+      const assets = await firstValueFrom(this.api.getStudioAssets({
+        assetScope: this.studioForm.assetScope,
+        opportunityId: this.studioForm.assetScope === 'opportunity' ? this.selectedOpportunityId() : null,
+        workflowId: this.studioForm.assetScope === 'workflow' ? this.selectedWorkflowId() : null,
+      }));
+
+      this.studioAssets.set(assets);
+      const selectedId = this.selectedStudioAssetId();
+      const next = selectedId ? assets.find((asset) => asset.id === selectedId) ?? assets[0] ?? null : assets[0] ?? null;
+      this.selectedStudioAssetId.set(next?.id ?? null);
+      this.selectedStudioAsset.set(next);
+    } catch (error) {
+      this.handleError(error, 'No se pudieron cargar los assets del Studio.');
+    } finally {
+      if (showLoading) {
+        this.studioLoading.set(false);
+      }
+    }
+  }
+
+  protected async generateStudioPackage(): Promise<void> {
+    this.studioGenerating.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
+
+    try {
+      const result = await firstValueFrom(this.api.generateStudioContent({
+        assetScope: this.studioForm.assetScope,
+        opportunityId: this.studioForm.assetScope === 'opportunity' ? this.selectedOpportunityId() : null,
+        workflowId: this.studioForm.assetScope === 'workflow' ? this.selectedWorkflowId() : null,
+        audience: this.studioForm.audience.trim() || null,
+        tone: this.studioForm.tone.trim() || null,
+        goal: this.studioForm.goal.trim() || null,
+        includeReport: this.studioForm.includeReport,
+        includeVideo: this.studioForm.includeVideo,
+        renderVideo: this.studioForm.renderVideo,
+      }));
+
+      this.studioResult.set(result);
+      this.successMessage.set('Studio generado correctamente.');
+      this.studioAssets.set(result.savedAssets);
+      const firstAsset = result.savedAssets[0] ?? null;
+      this.selectedStudioAssetId.set(firstAsset?.id ?? null);
+      this.selectedStudioAsset.set(firstAsset);
+    } catch (error) {
+      this.handleError(error, 'No se pudo generar el paquete de reporte/video.');
+    } finally {
+      this.studioGenerating.set(false);
+    }
+  }
+
+  protected selectStudioAsset(asset: StudioAsset): void {
+    this.selectedStudioAssetId.set(asset.id);
+    this.selectedStudioAsset.set(asset);
+  }
+
+  protected getStudioAssetDownloadUrl(asset: StudioAsset | null): string {
+    return asset ? `/api/studio/assets/${asset.id}/download` : '';
   }
 
   protected openN8n(): void {
@@ -695,6 +709,10 @@ export class App {
     if (url) {
       window.open(url, '_blank', 'noopener');
     }
+  }
+
+  protected openPersonalAssistant(): void {
+    window.open('/assistant', '_blank', 'noopener');
   }
 
   private async ensureSelectedWorkflow(workflowSummaries: WorkflowSummary[]): Promise<void> {
@@ -763,6 +781,7 @@ export class App {
     this.dashboard.set(dashboard);
     this.opportunities.set(opportunities);
     await this.syncOpportunitySelection(opportunities, false);
+    await this.refreshStudioAssets(false);
   }
 
   private getFiltersPayload(): {

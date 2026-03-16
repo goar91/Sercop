@@ -3,7 +3,9 @@ param(
     [string]$Folder = ".\\knowledge\\code",
     [string]$QdrantUrl = "http://localhost:6333",
     [string]$OllamaUrl = "http://localhost:11434",
-    [string]$Model = "nomic-embed-text"
+    [string]$Model = "nomic-embed-text",
+    [string[]]$IncludeExtensions = @(".md", ".txt", ".json", ".csv", ".ps1", ".yml", ".yaml"),
+    [string[]]$ExcludeDirectories = @("node_modules", "dist", "bin", "obj", ".git", ".angular", "logs", "run", "tmp", ".docker", ".dotnet")
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,7 +34,10 @@ function Split-Text {
 }
 
 $root = Resolve-Path $Folder
-$files = Get-ChildItem $root -Recurse -File | Where-Object { $_.Extension -in ".md", ".txt", ".json", ".csv", ".ps1", ".yml", ".yaml" }
+$files = Get-ChildItem $root -Recurse -File | Where-Object {
+    $segments = ($_.FullName -replace '/', '\') -split '\\'
+    $_.Extension -in $IncludeExtensions -and -not ($segments | Where-Object { $_ -in $ExcludeDirectories } | Select-Object -First 1)
+}
 
 if (-not $files) {
     throw "No se encontraron archivos para cargar en $root"

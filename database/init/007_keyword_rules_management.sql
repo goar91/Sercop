@@ -63,6 +63,10 @@ INSERT INTO keyword_rules (rule_type, scope, keyword, family, weight, notes, act
 VALUES
   ('include', 'all', 'quimico', 'general', 1.00, 'termino amplio', TRUE),
   ('include', 'all', 'reactivo', 'laboratorio', 1.00, 'reactivos y kits', TRUE),
+  ('include', 'all', 'insumos de laboratorio', 'laboratorio', 1.00, 'insumos generales de laboratorio', TRUE),
+  ('include', 'all', 'material de laboratorio', 'laboratorio', 1.00, 'materiales y consumibles de laboratorio', TRUE),
+  ('include', 'all', 'equipos de laboratorio', 'laboratorio', 1.00, 'equipamiento de laboratorio', TRUE),
+  ('include', 'all', 'laboratorio', 'laboratorio', 0.80, 'termino amplio de laboratorio', TRUE),
   ('include', 'all', 'solvente', 'laboratorio', 1.00, 'insumos de laboratorio', TRUE),
   ('include', 'all', 'desinfectante', 'sanitizacion', 1.00, 'limpieza y sanitizacion', TRUE),
   ('include', 'all', 'hipoclorito', 'sanitizacion', 1.00, 'cloro e insumos afines', TRUE),

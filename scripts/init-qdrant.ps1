@@ -17,8 +17,19 @@ if ($vectorSize -lt 1) {
     throw "No se pudo determinar la dimension del embedding."
 }
 
-$collections = @("sercop_docs", "code_kb")
+$collections = @("sercop_docs", "code_kb", "repo_code")
 foreach ($name in $collections) {
+    try {
+        Invoke-RestMethod -Method Get -Uri "$QdrantUrl/collections/$name" -TimeoutSec 10 | Out-Null
+        Write-Host "Coleccion ya existente: $name"
+        continue
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode.value__ -ne 404) {
+            throw
+        }
+    }
+
     $body = @{
         vectors = @{
             size = $vectorSize
@@ -30,6 +41,6 @@ foreach ($name in $collections) {
     } | ConvertTo-Json -Depth 5
 
     Invoke-RestMethod -Method Put -Uri "$QdrantUrl/collections/$name" -ContentType "application/json" -Body $body | Out-Null
-    Write-Host "Coleccion creada/actualizada: $name (size=$vectorSize)"
+    Write-Host "Coleccion creada: $name (size=$vectorSize)"
 }
 

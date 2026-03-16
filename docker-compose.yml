@@ -134,6 +134,7 @@ services:
       INVITED_COMPANY_RUC: ${INVITED_COMPANY_RUC}
       OCDS_YEAR: ${OCDS_YEAR}
       POLL_MINUTES: ${POLL_MINUTES}
+      PROCESS_PUBLICATION_LOOKBACK_DAYS: ${PROCESS_PUBLICATION_LOOKBACK_DAYS}
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/import/workflows:ro

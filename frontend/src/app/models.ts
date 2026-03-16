@@ -247,6 +247,10 @@ export interface AssistantAskRequest {
   module?: string | null;
   opportunityId?: number | null;
   workflowId?: string | null;
+  filePath?: string | null;
+  language?: string | null;
+  selection?: string | null;
+  codeContext?: string | null;
 }
 
 export interface AssistantSource {
@@ -261,4 +265,55 @@ export interface AssistantReply {
   contextSummary: string;
   answer: string;
   sources: AssistantSource[];
+}
+
+export interface StudioGenerateRequest {
+  assetScope: 'dashboard' | 'opportunity' | 'workflow';
+  opportunityId?: number | null;
+  workflowId?: string | null;
+  audience?: string | null;
+  tone?: string | null;
+  goal?: string | null;
+  includeReport: boolean;
+  includeVideo: boolean;
+  renderVideo: boolean;
+}
+
+export interface StudioScene {
+  order: number;
+  title: string;
+  overlayText: string;
+  visualBrief: string;
+  voiceover: string;
+}
+
+export interface StudioAsset {
+  id: number;
+  assetType: string;
+  assetScope: string;
+  opportunityId?: number | null;
+  workflowId?: string | null;
+  title: string;
+  format: string;
+  audience?: string | null;
+  tone?: string | null;
+  modelName: string;
+  contentText?: string | null;
+  payloadJson: string;
+  createdAt: string;
+}
+
+export interface StudioGenerateResult {
+  assetScope: string;
+  model: string;
+  contextSummary: string;
+  reportMarkdown?: string | null;
+  videoHeadline?: string | null;
+  videoHook?: string | null;
+  videoVoiceover?: string | null;
+  storyboardMarkdown?: string | null;
+  captionsSrt?: string | null;
+  renderedVideoAssetId?: number | null;
+  scenes: StudioScene[];
+  savedAssets: StudioAsset[];
 }
