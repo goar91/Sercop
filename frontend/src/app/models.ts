@@ -241,3 +241,24 @@ export interface MetaInfo {
   responsibleEmail?: string | null;
   invitedCompanyName: string;
 }
+
+export interface AssistantAskRequest {
+  question: string;
+  module?: string | null;
+  opportunityId?: number | null;
+  workflowId?: string | null;
+}
+
+export interface AssistantSource {
+  label: string;
+  reference: string;
+  kind: string;
+}
+
+export interface AssistantReply {
+  module: string;
+  model: string;
+  contextSummary: string;
+  answer: string;
+  sources: AssistantSource[];
+}

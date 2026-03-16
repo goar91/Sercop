@@ -231,3 +231,24 @@ public sealed record MetaDto(
     string? ResponsibleEmail,
     string InvitedCompanyName
 );
+
+public sealed record AssistantAskRequest(
+    string Question,
+    string? Module,
+    long? OpportunityId,
+    string? WorkflowId
+);
+
+public sealed record AssistantSourceDto(
+    string Label,
+    string Reference,
+    string Kind
+);
+
+public sealed record AssistantReplyDto(
+    string Module,
+    string Model,
+    string ContextSummary,
+    string Answer,
+    IReadOnlyList<AssistantSourceDto> Sources
+);

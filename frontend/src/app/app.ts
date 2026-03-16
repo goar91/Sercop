@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { CrmApiService } from './crm-api.service';
 import {
+  AssistantReply,
   BulkInvitationImportResult,
   DashboardSummary,
   InvitationSyncResult,
@@ -17,6 +18,8 @@ import {
   WorkflowSummary,
   Zone,
 } from './models';
+
+type Workspace = 'pipeline' | 'workflows' | 'config';
 
 @Component({
   selector: 'app-root',
@@ -40,6 +43,76 @@ export class App {
   protected readonly workflowSummaries = signal<WorkflowSummary[]>([]);
   protected readonly selectedWorkflowId = signal<string | null>(null);
   protected readonly selectedWorkflow = signal<WorkflowDetail | null>(null);
+  protected readonly activeWorkspace = signal<Workspace>('pipeline');
+  protected readonly assistantReply = signal<AssistantReply | null>(null);
+  protected readonly assistantLoading = signal(false);
+  protected readonly assistantError = signal('');
+  protected readonly assistantModule = computed(() => {
+    switch (this.activeWorkspace()) {
+      case 'workflows':
+        return 'workflows';
+      case 'config':
+        return 'config';
+      default:
+        return this.selectedOpportunityId() ? 'opportunities' : 'dashboard';
+    }
+  });
+  protected readonly assistantModuleLabel = computed(() => {
+    switch (this.assistantModule()) {
+      case 'workflows':
+        return 'Automatizaciones';
+      case 'config':
+        return 'Configuracion';
+      case 'opportunities':
+        return 'Pipeline';
+      default:
+        return 'Dashboard';
+    }
+  });
+  protected readonly assistantContextHint = computed(() => {
+    switch (this.assistantModule()) {
+      case 'workflows':
+        return this.selectedWorkflow()
+          ? `Workflow activo: ${this.selectedWorkflow()?.name}`
+          : 'Selecciona un workflow o pide un diagnostico de automatizacion.';
+      case 'config':
+        return 'Revisa zonas, usuarios, reglas y forma de operar el CRM.';
+      case 'opportunities':
+        return this.selectedOpportunity()
+          ? `Proceso activo: ${this.selectedOpportunity()?.processCode || this.selectedOpportunity()?.ocidOrNic}`
+          : 'Selecciona un proceso o pregunta por el estado del pipeline.';
+      default:
+        return 'Pide un resumen ejecutivo, prioridades o acciones recomendadas.';
+    }
+  });
+  protected readonly assistantQuickPrompts = computed(() => {
+    switch (this.assistantModule()) {
+      case 'workflows':
+        return [
+          'Explica este workflow y su objetivo operativo.',
+          'Que riesgos o cuellos de botella ves en esta automatizacion?',
+          'Que automatizacion adicional haria mas competitivo este sistema?',
+        ];
+      case 'config':
+        return [
+          'Que falta configurar para operar mejor el CRM?',
+          'Revisa usuarios, zonas y reglas y dime que falta.',
+          'Que cambios harian mas competitivo este proyecto?',
+        ];
+      case 'opportunities':
+        return [
+          'Resume este proceso y dime si conviene revisarlo con prioridad.',
+          'Que debo validar antes de asignar este proceso?',
+          'Lista riesgos, faltantes y siguientes pasos para esta oportunidad.',
+        ];
+      default:
+        return [
+          'Dame un resumen ejecutivo del tablero actual.',
+          'Cuales son las prioridades operativas inmediatas?',
+          'Que mejoras de producto y negocio deberiamos implementar?',
+        ];
+    }
+  });
   protected readonly filteredKeywordRules = computed(() => {
     const search = this.keywordListFilters.search.trim().toLowerCase();
     const type = this.keywordListFilters.ruleType;
@@ -183,6 +256,10 @@ export class App {
     invitationNotes: '',
   };
 
+  protected assistantForm = {
+    question: '',
+  };
+
   protected keywordListFilters = {
     search: '',
     ruleType: '' as '' | 'include' | 'exclude',
@@ -253,6 +330,7 @@ export class App {
   }
 
   protected async selectOpportunity(id: number, showLoading = true): Promise<void> {
+    this.activeWorkspace.set('pipeline');
     this.selectedOpportunityId.set(id);
     if (showLoading) {
       this.detailLoading.set(true);
@@ -422,6 +500,7 @@ export class App {
   }
 
   protected editZone(zone: Zone): void {
+    this.activeWorkspace.set('config');
     this.zoneForm = {
       id: zone.id,
       name: zone.name,
@@ -473,6 +552,7 @@ export class App {
   }
 
   protected editUser(user: User): void {
+    this.activeWorkspace.set('config');
     this.userForm = {
       id: user.id,
       fullName: user.fullName,
@@ -529,6 +609,7 @@ export class App {
   }
 
   protected editKeyword(rule: KeywordRule): void {
+    this.activeWorkspace.set('config');
     this.keywordForm = {
       id: rule.id,
       ruleType: rule.ruleType,
@@ -563,7 +644,48 @@ export class App {
     };
   }
 
+  protected activateWorkspace(workspace: Workspace): void {
+    this.activeWorkspace.set(workspace);
+  }
+
+  protected async askAssistant(): Promise<void> {
+    const question = this.assistantForm.question.trim();
+    if (!question) {
+      return;
+    }
+
+    this.assistantLoading.set(true);
+    this.assistantError.set('');
+
+    try {
+      const reply = await firstValueFrom(this.api.askAssistant({
+        question,
+        module: this.assistantModule(),
+        opportunityId: this.selectedOpportunityId(),
+        workflowId: this.selectedWorkflowId(),
+      }));
+
+      this.assistantReply.set(reply);
+    } catch (error) {
+      this.assistantError.set(this.resolveErrorMessage(error, 'No se pudo consultar al asistente.'));
+    } finally {
+      this.assistantLoading.set(false);
+    }
+  }
+
+  protected askQuickPrompt(prompt: string): void {
+    this.assistantForm.question = prompt;
+    void this.askAssistant();
+  }
+
+  protected clearAssistant(): void {
+    this.assistantForm.question = '';
+    this.assistantReply.set(null);
+    this.assistantError.set('');
+  }
+
   protected async selectWorkflow(id: string): Promise<void> {
+    this.activeWorkspace.set('workflows');
     this.selectedWorkflowId.set(id);
     await this.loadWorkflowDetail(id);
   }

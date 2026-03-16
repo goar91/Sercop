@@ -40,8 +40,18 @@ services:
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE}
       OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL}
       OLLAMA_MAX_LOADED_MODELS: ${OLLAMA_MAX_LOADED_MODELS}
+      OLLAMA_SCHED_SPREAD: ${OLLAMA_SCHED_SPREAD}
+      CUDA_VISIBLE_DEVICES: ${OLLAMA_CUDA_VISIBLE_DEVICES}
     volumes:
       - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 15s

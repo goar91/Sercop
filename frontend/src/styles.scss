@@ -1,13 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&display=swap');
 
 html,
 body {
   margin: 0;
   min-height: 100%;
   background:
-    radial-gradient(circle at top, rgba(13, 106, 97, 0.12), transparent 28%),
-    linear-gradient(180deg, #efe7d7, #f7f2e8 45%, #ece5d8 100%);
-  font-family: 'Manrope', 'Segoe UI', sans-serif;
+    radial-gradient(circle at top left, rgba(12, 123, 147, 0.18), transparent 26%),
+    radial-gradient(circle at right, rgba(217, 119, 6, 0.12), transparent 24%),
+    linear-gradient(180deg, #edf4fb, #f7fbff 45%, #e8eff6 100%);
+  font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
 }
 
 body {
@@ -20,4 +21,12 @@ body {
 
 a {
   color: inherit;
+}
+
+h1,
+h2,
+h3,
+strong,
+button {
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
 }

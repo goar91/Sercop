@@ -10,9 +10,24 @@ $ErrorActionPreference = "Stop"
 
 function Split-Text {
     param([string]$Text, [int]$ChunkSize = 1200)
-    for ($i = 0; $i -lt $Text.Length; $i += $ChunkSize) {
-        $length = [Math]::Min($ChunkSize, $Text.Length - $i)
-        $Text.Substring($i, $length)
+    $builder = [System.Text.StringBuilder]::new()
+    $currentLength = 0
+    $enumerator = [System.Globalization.StringInfo]::GetTextElementEnumerator($Text)
+
+    while ($enumerator.MoveNext()) {
+        $element = [string]$enumerator.Current
+        if ($currentLength -ge $ChunkSize -and $builder.Length -gt 0) {
+            $builder.ToString()
+            [void]$builder.Clear()
+            $currentLength = 0
+        }
+
+        [void]$builder.Append($element)
+        $currentLength += $element.Length
+    }
+
+    if ($builder.Length -gt 0) {
+        $builder.ToString()
     }
 }
 
@@ -48,7 +63,8 @@ foreach ($file in $files) {
             )
         } | ConvertTo-Json -Depth 10 -Compress
 
-        Invoke-RestMethod -Method Put -Uri "$QdrantUrl/collections/$Collection/points" -ContentType "application/json" -Body $payload | Out-Null
+        $payloadBytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
+        Invoke-RestMethod -Method Put -Uri "$QdrantUrl/collections/$Collection/points" -ContentType "application/json; charset=utf-8" -Body $payloadBytes | Out-Null
     }
 }
 

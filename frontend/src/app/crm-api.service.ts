@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import {
+  AssistantAskRequest,
+  AssistantReply,
   BulkInvitationImportRequest,
   BulkInvitationImportResult,
   DashboardSummary,
@@ -137,5 +139,9 @@ export class CrmApiService {
 
   getWorkflow(id: string) {
     return this.http.get<WorkflowDetail>(`${this.baseUrl}/workflows/${id}`);
+  }
+
+  askAssistant(payload: AssistantAskRequest) {
+    return this.http.post<AssistantReply>(`${this.baseUrl}/assistant/ask`, payload);
   }
 }

@@ -69,6 +69,10 @@ builder.Services.AddHttpClient<SercopInvitationPublicClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(45);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("HDM-SERCOP-CRM/1.0");
 });
+builder.Services.AddHttpClient<AiAssistantService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(180);
+});
 builder.Services.AddHostedService<PublicInvitationSyncService>();
 
 var app = builder.Build();
@@ -361,6 +365,20 @@ app.MapGet("/api/workflows/{id}", async (string id, CrmRepository repository, Ca
 {
     var workflow = await repository.GetWorkflowAsync(id, cancellationToken);
     return workflow is null ? Results.NotFound() : Results.Ok(workflow);
+});
+
+app.MapPost("/api/assistant/ask", async (AssistantAskRequest request, AiAssistantService assistant, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Question))
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["question"] = ["La pregunta es obligatoria."]
+        });
+    }
+
+    var reply = await assistant.AskAsync(request, cancellationToken);
+    return Results.Ok(reply);
 });
 
 app.MapFallback(async context =>

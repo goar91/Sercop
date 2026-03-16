@@ -63,7 +63,37 @@
     </section>
   }
 
-  <section class="workspace">
+  <section class="panel command-deck">
+    <div class="section-switcher">
+      <button type="button" class="nav-pill" [class.active]="activeWorkspace() === 'pipeline'" (click)="activateWorkspace('pipeline')">Radar comercial</button>
+      <button type="button" class="nav-pill" [class.active]="activeWorkspace() === 'workflows'" (click)="activateWorkspace('workflows')">Automatizaciones</button>
+      <button type="button" class="nav-pill" [class.active]="activeWorkspace() === 'config'" (click)="activateWorkspace('config')">Configuracion</button>
+    </div>
+
+    <div class="action-ribbon">
+      <button type="button" class="action-card" (click)="reloadAll()">
+        <strong>Actualizar radar</strong>
+        <span>Refresca oportunidades, reglas, usuarios y workflows.</span>
+      </button>
+
+      <button type="button" class="action-card" (click)="syncInvitations()">
+        <strong>Sincronizar invitaciones</strong>
+        <span>Consulta el reporte publico y confirma procesos para HDM.</span>
+      </button>
+
+      <button type="button" class="action-card" (click)="askQuickPrompt('Dame un resumen ejecutivo del tablero y prioridades operativas.')">
+        <strong>Brief IA</strong>
+        <span>Genera un estado ejecutivo del proyecto segun el modulo activo.</span>
+      </button>
+
+      <button type="button" class="action-card" (click)="openN8n()">
+        <strong>Abrir n8n</strong>
+        <span>Salta al editor para revisar workflows y ejecuciones.</span>
+      </button>
+    </div>
+  </section>
+
+  <section class="workspace mission">
     <aside class="panel sidebar">
       <div class="panel-header">
         <div>
@@ -406,10 +436,70 @@
         <div class="empty-state">Selecciona un proceso para ver su detalle, asignarlo y revisar el analisis.</div>
       }
     </main>
+
+    <aside class="panel copilot-panel" [class.panel-focus]="activeWorkspace() === 'pipeline'">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Copiloto IA</p>
+          <h2>Asistente contextual</h2>
+        </div>
+        <span class="chip source">{{ assistantModuleLabel() }}</span>
+      </div>
+
+      <p class="copilot-context">{{ assistantReply()?.contextSummary || assistantContextHint() }}</p>
+
+      <div class="prompt-grid">
+        @for (prompt of assistantQuickPrompts(); track prompt) {
+          <button type="button" class="prompt-chip" (click)="askQuickPrompt(prompt)">{{ prompt }}</button>
+        }
+      </div>
+
+      <form class="copilot-form" (ngSubmit)="askAssistant()">
+        <label class="full-width">
+          <span>Pregunta</span>
+          <textarea [(ngModel)]="assistantForm.question" name="assistantQuestion" rows="5" placeholder="Pregunta por oportunidades, workflows, configuracion o mejoras del proyecto"></textarea>
+        </label>
+
+        <div class="form-actions full-width">
+          <button type="button" class="ghost" (click)="clearAssistant()">Limpiar</button>
+          <button type="submit" class="primary" [disabled]="assistantLoading()">{{ assistantLoading() ? 'Consultando...' : 'Consultar IA' }}</button>
+        </div>
+      </form>
+
+      @if (assistantError()) {
+        <section class="banner error small-banner">{{ assistantError() }}</section>
+      }
+
+      @if (assistantReply(); as reply) {
+        <article class="copilot-response">
+          <div class="copilot-meta">
+            <span class="chip muted">{{ reply.model }}</span>
+            <span class="chip">{{ reply.module }}</span>
+          </div>
+          <pre class="copilot-answer">{{ reply.answer }}</pre>
+
+          @if (reply.sources.length > 0) {
+            <div class="source-list">
+              @for (source of reply.sources; track source.reference) {
+                <div class="source-item">
+                  <strong>{{ source.label }}</strong>
+                  <small>{{ source.kind }}</small>
+                  <span>{{ source.reference }}</span>
+                </div>
+              }
+            </div>
+          }
+        </article>
+      } @else {
+        <div class="empty-state small copilot-empty">
+          El asistente usa el modulo activo, el proceso o workflow seleccionado y la base local del proyecto para responder con contexto.
+        </div>
+      }
+    </aside>
   </section>
 
   <section class="workspace secondary">
-    <section class="panel config-panel">
+    <section class="panel config-panel" [class.panel-focus]="activeWorkspace() === 'config'">
       <div class="panel-header">
         <div>
           <p class="eyebrow">Configuracion operacional</p>
@@ -733,7 +823,7 @@
       </div>
     </section>
 
-    <section class="panel workflow-panel">
+    <section class="panel workflow-panel" [class.panel-focus]="activeWorkspace() === 'workflows'">
       <div class="panel-header">
         <div>
           <p class="eyebrow">Workflows cargados</p>
