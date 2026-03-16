@@ -77,6 +77,7 @@ try {
         if (-not $KeepCrmTunnel) {
             Write-Host 'Deteniendo tunel externo del CRM...'
             docker compose --profile crm-tunnel stop crm-cloudflared
+            docker compose --profile crm-ngrok stop crm-ngrok
         }
     }
 }

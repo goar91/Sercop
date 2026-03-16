@@ -49,8 +49,8 @@ Solucion local para monitorear procesos del SERCOP, confirmar invitaciones a HDM
 
 ## Acceso externo al CRM
 
-- El modo recomendado ahora es `Cloudflare Quick Tunnel` solo para el CRM.
-- Esta opcion no necesita abrir puertos del router ni exponer `n8n` o `Mailpit`.
+- El modo actual intenta primero `IP publica` del CRM, luego `ngrok` y, si `ngrok` no puede abrir sesion con esa cuenta, usa un tunel saliente de respaldo.
+- `n8n` y `Mailpit` no se exponen con este flujo del CRM.
 - El arranque escribe la URL publica del CRM en `run\crm-external-url.txt` y tambien la muestra en consola.
 - Si no quieres abrir el tunel en una sesion concreta:
   - `powershell -ExecutionPolicy Bypass -File scripts\start-system.ps1 -SkipCrmTunnel`

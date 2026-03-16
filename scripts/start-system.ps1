@@ -261,9 +261,9 @@ function Wait-NgrokUrl {
         try {
             $logs = docker compose --profile crm-ngrok logs --no-color --tail=50 crm-ngrok 2>$null
             if ($LASTEXITCODE -eq 0 -and $logs) {
-                $match = [regex]::Match(($logs -join [Environment]::NewLine), 'https://[^\s"''`]+', 'IgnoreCase')
-                if ($match.Success) {
-                    return $match.Value
+                $matches = [regex]::Matches(($logs -join [Environment]::NewLine), 'https://[a-z0-9.-]+\.ngrok(?:-free)?\.app', 'IgnoreCase')
+                if ($matches.Count -gt 0) {
+                    return $matches[$matches.Count - 1].Value
                 }
             }
         }
@@ -271,6 +271,29 @@ function Wait-NgrokUrl {
         }
 
         Start-Sleep -Seconds 2
+    }
+
+    return $null
+}
+
+function Get-NgrokFailureMessage {
+    try {
+        $logs = docker compose --profile crm-ngrok logs --no-color --tail=80 crm-ngrok 2>$null
+        if ($LASTEXITCODE -ne 0 -or -not $logs) {
+            return $null
+        }
+
+        $joined = $logs -join [Environment]::NewLine
+        if ($joined -match 'ERR_NGROK_108') {
+            return 'ERR_NGROK_108: la cuenta ngrok ya tiene otra sesion activa y el plan actual permite solo una.'
+        }
+
+        $errorLine = $logs | Where-Object { $_ -match 'ERROR:' } | Select-Object -Last 1
+        if ($errorLine) {
+            return $errorLine.Trim()
+        }
+    }
+    catch {
     }
 
     return $null
@@ -284,9 +307,9 @@ function Wait-CloudflareQuickUrl {
         try {
             $logs = docker compose --profile crm-tunnel logs --no-color --tail=50 crm-cloudflared 2>$null
             if ($LASTEXITCODE -eq 0 -and $logs) {
-                $match = [regex]::Match(($logs -join [Environment]::NewLine), 'https://[a-z0-9-]+\.trycloudflare\.com', 'IgnoreCase')
-                if ($match.Success) {
-                    return $match.Value
+                $matches = [regex]::Matches(($logs -join [Environment]::NewLine), 'https://[a-z0-9-]+\.trycloudflare\.com', 'IgnoreCase')
+                if ($matches.Count -gt 0) {
+                    return $matches[$matches.Count - 1].Value
                 }
             }
         }
@@ -297,6 +320,19 @@ function Wait-CloudflareQuickUrl {
     }
 
     return $null
+}
+
+function Start-CloudflareQuickTunnel {
+    param([int]$Port)
+
+    docker compose --profile crm-ngrok stop crm-ngrok | Out-Null
+    $env:CRM_EXTERNAL_TARGET_PORT = "$Port"
+    docker compose --profile crm-tunnel up -d crm-cloudflared | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'No se pudo iniciar el tunel externo del CRM con Cloudflare.'
+    }
+
+    return Wait-CloudflareQuickUrl -TimeoutSeconds 60
 }
 
 function Start-CrmExternalTunnel {
@@ -332,7 +368,18 @@ function Start-CrmExternalTunnel {
                 throw 'No se pudo iniciar el tunel ngrok del CRM.'
             }
 
-            return Wait-NgrokUrl -TimeoutSeconds 60
+            $ngrokUrl = Wait-NgrokUrl -TimeoutSeconds 60
+            if ($ngrokUrl) {
+                return $ngrokUrl
+            }
+
+            $failure = Get-NgrokFailureMessage
+            docker compose --profile crm-ngrok stop crm-ngrok | Out-Null
+            if ([string]::IsNullOrWhiteSpace($failure)) {
+                $failure = 'ngrok no devolvio una URL publica valida para el CRM.'
+            }
+            Write-Warning $failure
+            return Start-CloudflareQuickTunnel -Port $Port
         }
         'ngrok' {
             $token = Get-NgrokAuthToken -Config $Config
@@ -348,17 +395,20 @@ function Start-CrmExternalTunnel {
                 throw 'No se pudo iniciar el tunel ngrok del CRM.'
             }
 
-            return Wait-NgrokUrl -TimeoutSeconds 60
-        }
-        'cloudflare_quick' {
-            docker compose --profile crm-ngrok stop crm-ngrok | Out-Null
-            $env:CRM_EXTERNAL_TARGET_PORT = "$Port"
-            docker compose --profile crm-tunnel up -d crm-cloudflared | Out-Null
-            if ($LASTEXITCODE -ne 0) {
-                throw 'No se pudo iniciar el tunel externo del CRM con Cloudflare.'
+            $ngrokUrl = Wait-NgrokUrl -TimeoutSeconds 60
+            if ($ngrokUrl) {
+                return $ngrokUrl
             }
 
-            return Wait-CloudflareQuickUrl -TimeoutSeconds 60
+            $failure = Get-NgrokFailureMessage
+            docker compose --profile crm-ngrok stop crm-ngrok | Out-Null
+            if ([string]::IsNullOrWhiteSpace($failure)) {
+                $failure = 'ngrok no devolvio una URL publica valida para el CRM.'
+            }
+            throw $failure
+        }
+        'cloudflare_quick' {
+            return Start-CloudflareQuickTunnel -Port $Port
         }
         default {
             throw "Modo de acceso externo no soportado: $mode"
