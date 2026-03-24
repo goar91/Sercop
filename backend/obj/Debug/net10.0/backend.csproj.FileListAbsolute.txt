@@ -28,7 +28,6 @@ C:\Automatización\backend\obj\Debug\net10.0\refint\backend.dll
 C:\Automatización\backend\obj\Debug\net10.0\backend.pdb
 C:\Automatización\backend\obj\Debug\net10.0\backend.genruntimeconfig.cache
 C:\Automatización\backend\obj\Debug\net10.0\ref\backend.dll
-C:\Automatización\backend\bin\Debug\net10.0\backend.exe
 C:\Automatización\run\backend-build-check\appsettings.Development.json
 C:\Automatización\run\backend-build-check\appsettings.json
 C:\Automatización\run\backend-build-check\backend.staticwebassets.endpoints.json
@@ -37,3 +36,19 @@ C:\Automatización\run\backend-build-check\backend.deps.json
 C:\Automatización\run\backend-build-check\backend.runtimeconfig.json
 C:\Automatización\run\backend-build-check\backend.dll
 C:\Automatización\run\backend-build-check\backend.pdb
+C:\Automatización\backend\obj\Debug\net10.0\backend.sourcelink.json
+C:\Automatización\backend\build-check\appsettings.Development.json
+C:\Automatización\backend\build-check\appsettings.json
+C:\Automatización\backend\build-check\backend.staticwebassets.endpoints.json
+C:\Automatización\backend\build-check\backend.exe
+C:\Automatización\backend\build-check\backend.deps.json
+C:\Automatización\backend\build-check\backend.runtimeconfig.json
+C:\Automatización\backend\build-check\backend.dll
+C:\Automatización\backend\build-check\backend.pdb
+C:\Automatización\backend\build-check\Npgsql.dll
+C:\Automatización\backend\bin\Debug\net10.0\build-check\appsettings.Development.json
+C:\Automatización\backend\bin\Debug\net10.0\build-check\appsettings.json
+C:\Automatización\backend\bin\Debug\net10.0\build-check\backend.deps.json
+C:\Automatización\backend\bin\Debug\net10.0\build-check\backend.runtimeconfig.json
+C:\Automatización\backend\bin\Debug\net10.0\build-check\backend.staticwebassets.endpoints.json
+C:\Automatización\backend\bin\Debug\net10.0\backend.exe

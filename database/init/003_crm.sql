@@ -76,12 +76,15 @@ CREATE INDEX IF NOT EXISTS idx_opportunities_estado
 CREATE INDEX IF NOT EXISTS idx_assignment_history_opportunity_id
   ON crm_assignment_history(opportunity_id);
 
-CREATE OR REPLACE VIEW crm_opportunity_overview AS
+DROP VIEW IF EXISTS crm_opportunity_overview;
+
+CREATE VIEW crm_opportunity_overview AS
 SELECT
   o.id,
   o.source,
   o.external_id,
   o.ocid_or_nic,
+  o.process_code,
   o.titulo,
   o.entidad,
   o.tipo,
@@ -91,6 +94,10 @@ SELECT
   o.url,
   o.invited_company_name,
   o.is_invited_match,
+  o.invitation_source,
+  o.invitation_notes,
+  o.invitation_evidence_url,
+  o.invitation_verified_at,
   o.match_score,
   o.ai_score,
   o.recomendacion,

@@ -122,8 +122,24 @@ const filterEmailCandidatesCode = `return $input
 const ocdsSeedSearchTermsCode = `const rules = $items('Load Keyword Rules').map((item) => item.json);
 const uniqueRules = [];
 const seen = new Set();
-const ignoredKeywords = new Set(['acido', 'base', 'quimico']);
-const maxSearchTerms = Number($env.OCDS_MAX_SEARCH_TERMS || 8);
+const ignoredKeywords = new Set(['acido', 'base']);
+const preferredKeywords = [
+  'laboratorio',
+  'reactivo',
+  'reactivos',
+  'insumo',
+  'insumos',
+  'material de laboratorio',
+  'materiales de laboratorio',
+  'insumos quimicos',
+  'insumo quimico',
+  'quimica',
+  'quimico',
+  'reagente',
+  'vidrieria',
+  'micropipeta',
+];
+const maxSearchTerms = Number($env.OCDS_MAX_SEARCH_TERMS || 12);
 
 for (const rule of rules) {
   if (String(rule.rule_type || '') !== 'include') {
@@ -145,7 +161,176 @@ for (const rule of rules) {
   });
 }
 
+uniqueRules.sort((left, right) => {
+  const leftKeyword = String(left.json.searchKeyword || '').trim().toLowerCase();
+  const rightKeyword = String(right.json.searchKeyword || '').trim().toLowerCase();
+  const leftPreferred = preferredKeywords.indexOf(leftKeyword);
+  const rightPreferred = preferredKeywords.indexOf(rightKeyword);
+
+  if (leftPreferred !== rightPreferred) {
+    if (leftPreferred === -1) {
+      return 1;
+    }
+
+    if (rightPreferred === -1) {
+      return -1;
+    }
+
+    return leftPreferred - rightPreferred;
+  }
+
+  if ((right.json.weight || 0) !== (left.json.weight || 0)) {
+    return (right.json.weight || 0) - (left.json.weight || 0);
+  }
+
+  return leftKeyword.localeCompare(rightKeyword);
+});
+
 return uniqueRules.slice(0, maxSearchTerms);`;
+
+const chemistrySupplyGateCode = String.raw`
+function hasStrongChemistrySignal(haystack) {
+  return [
+    /reactiv/i,
+    /reagent/i,
+    /insumos?/i,
+    /material(?:es)? de laboratorio/i,
+    /material(?:es)? de referencia/i,
+    /est[aá]ndares?/i,
+    /qu[ií]mic(?:o|a|os|as)/i,
+    /insumos? qu[ií]mic/i,
+    /solvente/i,
+    /etanol/i,
+    /isopropanol/i,
+    /hidroxido/i,
+    /hipoclorito/i,
+    /acetileno/i,
+    /\bgases?\b/i,
+    /kits?/i,
+    /tests? fotom[eé]tricos?/i,
+    /medios? de cultivo/i,
+    /buffer/i,
+    /calibradores?/i,
+    /controles?/i,
+    /colorantes?/i,
+  ].some((pattern) => pattern.test(haystack));
+}
+
+function hasLabContextSignal(haystack) {
+  return [
+    /laborator/i,
+    /microbiolog/i,
+    /fitopatolog/i,
+    /bromatolog/i,
+    /absorc[ií]on at[oó]mica/i,
+    /docencia e investigaci[oó]n/i,
+    /control de calidad/i,
+    /calidad del agua/i,
+    /aguas? residuales?/i,
+    /aguas? potables?/i,
+    /agua cruda/i,
+    /tejidos? vegetales?/i,
+    /suelos?/i,
+    /contaminantes?/i,
+  ].some((pattern) => pattern.test(haystack));
+}
+
+function hasNoiseSignal(haystack) {
+  return [
+    /transporte/i,
+    /estiba/i,
+    /alimentaci[oó]n/i,
+    /uniforme/i,
+    /combustible/i,
+    /extintor/i,
+    /base naval/i,
+    /base de datos/i,
+    /servidor/i,
+    /impresi[oó]n/i,
+    /fotocopi/i,
+    /outsourcing/i,
+    /agropecuar/i,
+    /agr[ií]col/i,
+    /fertiliz/i,
+    /malezas?/i,
+    /plagas?/i,
+    /[aá]reas? verdes/i,
+    /mobiliario/i,
+    /equipo inform[aá]tico/i,
+    /repuestos?/i,
+    /seguridad/i,
+    /veh[ií]culo/i,
+    /construcci[oó]n/i,
+    /servicio(?:s)? de/i,
+    /mantenimiento/i,
+    /calibraci[oó]n/i,
+    /desaduaniz/i,
+    /instrumentos? de medici[oó]n/i,
+    /aire acondicionado/i,
+    /vitrina/i,
+    /incubadora/i,
+    /centrifug/i,
+    /balanzas?/i,
+    /electrodom[eé]stic/i,
+    /accesorios? electr[oó]nic/i,
+    /invernadero/i,
+    /malla antipajaro/i,
+    /\bsaran\b/i,
+    /marmitas?/i,
+    /agitaci[oó]n/i,
+    /insumos generales/i,
+    /equipos? de laboratorio/i,
+    /adquisi(?:ci[oó]n)? de equipos?/i,
+  ].some((pattern) => pattern.test(haystack));
+}
+
+function hasPharmaSignal(haystack) {
+  return [
+    /solido oral/i,
+    /s[oó]lido oral/i,
+    /parenteral/i,
+    /ampollas?/i,
+    /c[aá]psulas?/i,
+    /tabletas?/i,
+    /comprimidos?/i,
+    /jarabe/i,
+    /mg\/ml/i,
+  ].some((pattern) => pattern.test(haystack));
+}
+
+function hasMedicalSignal(haystack) {
+  return [
+    /hospital(?:es)?/i,
+    /salud/i,
+    /cl[ií]nic(?:o|a|os|as)/i,
+    /centro m[eé]dic/i,
+    /m[eé]dic(?:o|a|os|as)/i,
+    /dispositivos? m[eé]dic/i,
+    /diagn[oó]stic/i,
+    /ex[aá]menes? de laboratorio/i,
+    /pacientes?/i,
+    /serolog/i,
+    /hormonas?/i,
+    /sangu[ií]n/i,
+    /hematol[oó]g/i,
+    /bioqu[ií]mic/i,
+    /anatom[ií]a patol[oó]gica/i,
+    /laboratorio de patolog[ií]a/i,
+    /veterinari/i,
+    /hemoaglutin/i,
+    /\b(vih|hiv)\b/i,
+    /bcr\s*\/?\s*abl/i,
+    /\bjak2\b/i,
+    /\bpcr\b/i,
+    /farmacotecnia/i,
+    /hospital del d[ií]a/i,
+    /hospitalari/i,
+    /apoyo tecnol[oó]gico/i,
+    /convenio de uso/i,
+    /pruebas? r[aá]pidas?/i,
+  ].some((pattern) => pattern.test(haystack));
+}
+`;
 
 const ocdsNormalizeSearchResultsCode = `const threshold = Number($env.MATCH_THRESHOLD || 60);
 const rules = $items('Load Keyword Rules').map((item) => item.json);
@@ -195,6 +380,8 @@ function normalizeText(value) {
   return String(value ?? '').toLowerCase();
 }
 
+${chemistrySupplyGateCode}
+
 function uniqueHits(rawHits) {
   const deduped = new Map();
 
@@ -223,8 +410,20 @@ function typeScore(processType) {
     return 25;
   }
 
-  if (/infima|ínfima|necesidad/i.test(normalized)) {
+  if (/r[eé]gimen especial/i.test(normalized)) {
+    return 22;
+  }
+
+  if (/bienes y servicios [uú]nicos|bienes y servicios unicos/i.test(normalized)) {
     return 20;
+  }
+
+  if (/infima|ínfima|necesidad|recepci[oó]n de proformas/i.test(normalized)) {
+    return 20;
+  }
+
+  if (/contrataci[oó]n|cotizaci[oó]n|licitaci[oó]n|menor cuant[ií]a/i.test(normalized)) {
+    return 18;
   }
 
   return normalized ? 15 : 10;
@@ -233,6 +432,35 @@ function typeScore(processType) {
 function parseDateScore(value) {
   const timestamp = Date.parse(String(value || ''));
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function extractDateKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
+  if (latinMatch) {
+    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
+  }
+
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) {
+    return '';
+  }
+
+  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+}
+
+function isCurrentDate(...values) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+  return values.some((value) => extractDateKey(value) === today);
 }
 
 const inputs = $input.all();
@@ -251,10 +479,32 @@ for (let index = 0; index < inputs.length; index++) {
     const processType = String(pick(row, ['internal_type', 'procurementMethodDetails', 'tipo']) || 'Sin tipo').trim();
     const publishedAt = String(pick(row, ['date', 'publishedDate', 'releaseDate']) || '').trim();
     const deadlineAt = String(pick(row, ['tender_tenderPeriod_endDate', 'tenderPeriod_endDate', 'deadline']) || '').trim();
+
+    if (!isCurrentDate(publishedAt, deadlineAt)) {
+      continue;
+    }
+
     const amount = asNumber(pick(row, ['amount', 'budget', 'value_amount']));
     const detailUrl = 'https://datosabiertos.compraspublicas.gob.ec/PLATAFORMA/api/record?ocid=' + encodeURIComponent(ocid);
     const processCode = extractProcessCode(ocid) || ocid;
     const haystack = normalizeText([title, entity, processType, searchKeyword].join(' '));
+
+    if (!hasStrongChemistrySignal(haystack)) {
+      continue;
+    }
+
+    if (!hasLabContextSignal(haystack) && !/qu[ií]mic/i.test(haystack)) {
+      continue;
+    }
+
+    if (hasMedicalSignal(haystack) || hasNoiseSignal(haystack)) {
+      continue;
+    }
+
+    if (hasPharmaSignal(haystack)) {
+      continue;
+    }
+
     const seededHits = searchKeyword ? [{ keyword: searchKeyword, weight: 1 }] : [];
     const includeHits = uniqueHits(
       includeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())).concat(seededHits),
@@ -333,8 +583,14 @@ const typeWeights = {
   'Infima Cuantia': 20,
   'Necesidades de Contratación y Recepción de Proformas': 20,
   'Necesidades de Contratacion y Recepcion de Proformas': 20,
-  'Bienes y Servicios únicos': 15,
-  'Bienes y Servicios unicos': 15,
+  'Bienes y Servicios únicos': 20,
+  'Bienes y Servicios unicos': 20,
+  'Régimen Especial': 22,
+  'Regimen Especial': 22,
+  'Menor Cuantía': 18,
+  'Menor Cuantia': 18,
+  'Cotización': 18,
+  'Cotizacion': 18,
 };
 
 function sqlText(value) {
@@ -359,9 +615,44 @@ function normalizeProcessCode(value) {
   return /-\\d{3,}$/.test(raw) ? raw.replace(/-\\d{3,}$/, '') : raw;
 }
 
+${chemistrySupplyGateCode}
+
 function typeScore(processType) {
   const normalized = String(processType || '').trim();
+  if (/contrataci[oó]n/i.test(normalized)) {
+    return Math.max(typeWeights[normalized] ?? 0, 18);
+  }
+
   return typeWeights[normalized] ?? (normalized ? 15 : 10);
+}
+
+function extractDateKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
+  if (latinMatch) {
+    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
+  }
+
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) {
+    return '';
+  }
+
+  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+}
+
+function isCurrentDate(...values) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+  return values.some((value) => extractDateKey(value) === today);
 }
 
 function uniqueHits(rawHits) {
@@ -391,6 +682,11 @@ for (const input of $input.all()) {
   const processType = String(candidate.tipo || 'Sin tipo').trim();
   const publishedAt = String(candidate.fecha_publicacion || '').trim();
   const deadlineAt = String(candidate.fecha_limite || '').trim();
+
+  if (!isCurrentDate(publishedAt, deadlineAt)) {
+    continue;
+  }
+
   const amount = candidate.monto_ref ?? null;
   const processCode = normalizeProcessCode(candidate.process_code || candidate.ocid_or_nic);
   const currency = String(candidate.moneda || 'USD').trim() || 'USD';
@@ -401,6 +697,22 @@ for (const input of $input.all()) {
     ...(Array.isArray(candidate.initial_keywords) ? candidate.initial_keywords : []),
     JSON.stringify(candidate.candidate_payload || {}),
   ].join(' '));
+
+  if (!hasStrongChemistrySignal(haystack)) {
+    continue;
+  }
+
+  if (!hasLabContextSignal(haystack) && !/qu[ií]mic/i.test(haystack)) {
+    continue;
+  }
+
+  if (hasMedicalSignal(haystack) || hasNoiseSignal(haystack)) {
+    continue;
+  }
+
+  if (hasPharmaSignal(haystack)) {
+    continue;
+  }
 
   const seededHits = Array.isArray(candidate.initial_keywords)
     ? candidate.initial_keywords.map((keyword) => ({ keyword, weight: 1 }))
@@ -483,6 +795,8 @@ function normalizeText(value) {
   return String(value ?? '').toLowerCase();
 }
 
+${chemistrySupplyGateCode}
+
 function uniqueHits(rawHits) {
   const deduped = new Map();
 
@@ -524,8 +838,46 @@ function parseDateScore(value) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function extractDateKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
+  if (latinMatch) {
+    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
+  }
+
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) {
+    return '';
+  }
+
+  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+}
+
+function isCurrentDate(...values) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+  return values.some((value) => extractDateKey(value) === today);
+}
+
 function typeScore(processType) {
-  return /infima|infimas|necesidad/i.test(String(processType || '')) ? 20 : 15;
+  const normalized = String(processType || '').trim();
+  if (/recepci[oó]n de proformas|necesidades de contrataci[oó]n/i.test(normalized)) {
+    return 22;
+  }
+
+  if (/infima|infimas|[íi]nfimas cuant[ií]as/i.test(normalized)) {
+    return 20;
+  }
+
+  return 15;
 }
 
 let parsedPayload = $json;
@@ -558,6 +910,13 @@ for (const row of rows) {
   const title = String(row.objeto_contratacion || 'Sin titulo').trim();
   const entity = String(row.razon_social || 'Sin entidad').trim();
   const processType = String(row.tipo_necesidad || 'Necesidad').trim();
+  const publishedAt = String(row.fecha_publicacion || '').trim();
+  const deadlineAt = String(row.fecha_limite_propuesta || '').trim();
+
+  if (!isCurrentDate(publishedAt, deadlineAt)) {
+    continue;
+  }
+
   const haystack = normalizeText(
     [
       title,
@@ -569,6 +928,22 @@ for (const row of rows) {
       row.contacto,
     ].join(' '),
   );
+
+  if (!hasStrongChemistrySignal(haystack)) {
+    continue;
+  }
+
+  if (!hasLabContextSignal(haystack) && !/qu[ií]mic/i.test(haystack)) {
+    continue;
+  }
+
+  if (hasMedicalSignal(haystack) || hasNoiseSignal(haystack)) {
+    continue;
+  }
+
+  if (hasPharmaSignal(haystack)) {
+    continue;
+  }
 
   const includeHits = uniqueHits(
     includeRules.filter((rule) => haystack.includes(String(rule.keyword || '').toLowerCase())),
@@ -595,8 +970,8 @@ for (const row of rows) {
       titulo: title,
       entidad: entity,
       tipo: processType,
-      fecha_publicacion: String(row.fecha_publicacion || '').trim(),
-      fecha_limite: String(row.fecha_limite_propuesta || '').trim(),
+      fecha_publicacion: publishedAt,
+      fecha_limite: deadlineAt,
       monto_ref: null,
       moneda: 'USD',
       url: detailUrl,
@@ -633,6 +1008,8 @@ function normalizeText(value) {
   return String(value ?? '').toLowerCase();
 }
 
+${chemistrySupplyGateCode}
+
 function stripHtml(value) {
   return String(value ?? '')
     .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')
@@ -663,7 +1040,45 @@ function uniqueHits(rawHits) {
 }
 
 function typeScore(processType) {
-  return /infima|infimas|necesidad/i.test(String(processType || '')) ? 20 : 15;
+  const normalized = String(processType || '').trim();
+  if (/recepci[oó]n de proformas|necesidades de contrataci[oó]n/i.test(normalized)) {
+    return 22;
+  }
+
+  if (/infima|infimas|[íi]nfimas cuant[ií]as/i.test(normalized)) {
+    return 20;
+  }
+
+  return 15;
+}
+
+function extractDateKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+
+  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
+  if (latinMatch) {
+    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
+  }
+
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) {
+    return '';
+  }
+
+  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+}
+
+function isCurrentDate(...values) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+  return values.some((value) => extractDateKey(value) === today);
 }
 
 const out = [];
@@ -671,8 +1086,12 @@ const inputs = $input.all();
 for (let index = 0; index < inputs.length; index++) {
   const html = String(inputs[index].json?.body || inputs[index].json || '');
   const candidate = $item(index).$node['Normalize NCO List'].json;
+
+  if (!isCurrentDate(candidate.fecha_publicacion, candidate.fecha_limite)) {
+    continue;
+  }
+
   const text = stripHtml(html);
-  const textLower = text.toLowerCase();
   const haystack = normalizeText(
     [
       candidate.titulo,
@@ -682,6 +1101,22 @@ for (let index = 0; index < inputs.length; index++) {
       text,
     ].join(' '),
   );
+
+  if (!hasStrongChemistrySignal(haystack)) {
+    continue;
+  }
+
+  if (!hasLabContextSignal(haystack) && !/qu[ií]mic/i.test(haystack)) {
+    continue;
+  }
+
+  if (hasMedicalSignal(haystack) || hasNoiseSignal(haystack)) {
+    continue;
+  }
+
+  if (hasPharmaSignal(haystack)) {
+    continue;
+  }
 
   const seededHits = Array.isArray(candidate.initial_keywords)
     ? candidate.initial_keywords.map((keyword) => ({ keyword, weight: 1 }))

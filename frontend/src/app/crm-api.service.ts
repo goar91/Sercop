@@ -39,6 +39,7 @@ export class CrmApiService {
     zoneId?: number | null;
     assignedUserId?: number | null;
     invitedOnly?: boolean;
+    todayOnly?: boolean;
   }) {
     let params = new HttpParams();
 
@@ -59,6 +60,7 @@ export class CrmApiService {
     }
 
     params = params.set('invitedOnly', filters.invitedOnly ?? false);
+    params = params.set('todayOnly', filters.todayOnly ?? true);
     return this.http.get<OpportunityListItem[]>(`${this.baseUrl}/opportunities`, { params });
   }
 

@@ -18,6 +18,8 @@ import {
   Zone,
 } from './models';
 
+type CrmView = 'dashboard' | 'commercial' | 'operations' | 'invitations' | 'keywords' | 'workflows';
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule],
@@ -29,9 +31,61 @@ export class App {
   private readonly api = inject(CrmApiService);
   private readonly opportunityFiltersStorageKey = 'sercop-crm-opportunity-filters';
 
+  protected readonly moduleMenu: ReadonlyArray<{
+    id: CrmView;
+    label: string;
+    title: string;
+    description: string;
+  }> = [
+    {
+      id: 'dashboard',
+      label: 'Dashboard',
+      title: 'Vista general',
+      description: 'Resumen ejecutivo y accesos directos al CRM.',
+    },
+    {
+      id: 'commercial',
+      label: 'Comercial',
+      title: 'Tablero comercial',
+      description: 'Filtro, priorizacion, asignacion y seguimiento de procesos.',
+    },
+    {
+      id: 'operations',
+      label: 'Operacion',
+      title: 'Configuracion operacional',
+      description: 'Zonas, usuarios y datos base del equipo comercial.',
+    },
+    {
+      id: 'invitations',
+      label: 'Invitaciones',
+      title: 'Importar invitaciones HDM',
+      description: 'Sincronizacion publica e importacion manual de procesos invitados.',
+    },
+    {
+      id: 'keywords',
+      label: 'Keywords',
+      title: 'Palabras clave',
+      description: 'Reglas de inclusion y exclusion para OCDS y NCO.',
+    },
+    {
+      id: 'workflows',
+      label: 'Workflows',
+      title: 'Workflows cargados',
+      description: 'Consulta visual de automatizaciones importadas en n8n.',
+    },
+  ];
+
+  protected readonly currentView = signal<CrmView>('dashboard');
   protected readonly meta = signal<MetaInfo | null>(null);
   protected readonly dashboard = signal<DashboardSummary | null>(null);
   protected readonly opportunities = signal<OpportunityListItem[]>([]);
+  protected readonly invitedOpportunities = computed(() => this.opportunities().filter((item) => item.isInvitedMatch));
+  protected readonly currentChemicalOpportunities = computed(() => this.opportunities().filter(
+    (item) => !item.isInvitedMatch && !this.isOlderThanOneDay(item),
+  ));
+  protected readonly staleChemicalOpportunities = computed(() => this.opportunities().filter(
+    (item) => !item.isInvitedMatch && this.isOlderThanOneDay(item),
+  ));
   protected readonly selectedOpportunityId = signal<number | null>(null);
   protected readonly selectedOpportunity = signal<OpportunityDetail | null>(null);
   protected readonly zones = signal<Zone[]>([]);
@@ -40,6 +94,42 @@ export class App {
   protected readonly workflowSummaries = signal<WorkflowSummary[]>([]);
   protected readonly selectedWorkflowId = signal<string | null>(null);
   protected readonly selectedWorkflow = signal<WorkflowDetail | null>(null);
+  protected readonly activeWorkflowCount = computed(() => this.workflowSummaries().filter((workflow) => workflow.active).length);
+  protected readonly activeKeywordCount = computed(() => this.keywordRules().filter((rule) => rule.active).length);
+  protected readonly formattedRawPayload = computed(() => {
+    const detail = this.selectedOpportunity();
+    return detail ? this.formatJson(detail.rawPayloadJson) : '';
+  });
+  protected readonly dashboardStatuses = computed(() => (this.dashboard()?.statuses ?? []).slice(0, 6));
+  protected readonly dashboardZoneLoads = computed(() => (this.dashboard()?.zoneLoads ?? []).slice(0, 6));
+  protected readonly dashboardSpotlights = computed(() => {
+    const result: OpportunityListItem[] = [];
+    const seen = new Set<number>();
+    const addUnique = (items: OpportunityListItem[]) => {
+      for (const item of items) {
+        if (seen.has(item.id)) {
+          continue;
+        }
+
+        seen.add(item.id);
+        result.push(item);
+        if (result.length >= 6) {
+          break;
+        }
+      }
+    };
+
+    addUnique(this.invitedOpportunities());
+    if (result.length < 6) {
+      addUnique(this.currentChemicalOpportunities());
+    }
+    if (result.length < 6) {
+      addUnique(this.staleChemicalOpportunities());
+    }
+
+    return result;
+  });
+
   protected readonly filteredKeywordRules = computed(() => {
     const search = this.keywordListFilters.search.trim().toLowerCase();
     const type = this.keywordListFilters.ruleType;
@@ -59,21 +149,6 @@ export class App {
 
       return matchesSearch && matchesType && matchesScope && matchesStatus;
     });
-  });
-
-  protected readonly formattedOpportunity = computed(() => {
-    const detail = this.selectedOpportunity();
-    if (!detail) {
-      return null;
-    }
-
-    return {
-      aiRiesgos: this.formatJson(detail.aiRiesgosJson),
-      aiChecklist: this.formatJson(detail.aiChecklistJson),
-      aiListaCotizacion: this.formatJson(detail.aiListaCotizacionJson),
-      aiPreguntasAbiertas: this.formatJson(detail.aiPreguntasAbiertasJson),
-      rawPayload: this.formatJson(detail.rawPayloadJson),
-    };
   });
 
   protected readonly workflowLayout = computed(() => {
@@ -194,6 +269,55 @@ export class App {
     void this.reloadAll();
   }
 
+  protected async openView(view: CrmView): Promise<void> {
+    this.currentView.set(view);
+
+    if (view === 'workflows') {
+      await this.ensureWorkflowDetailLoaded();
+    }
+  }
+
+  protected async openCommercialWithOpportunity(id: number): Promise<void> {
+    this.currentView.set('commercial');
+    await this.selectOpportunity(id);
+  }
+
+  protected getModuleMetricValue(view: CrmView): number {
+    const dashboard = this.dashboard();
+
+    switch (view) {
+      case 'dashboard':
+        return dashboard?.totalOpportunities ?? 0;
+      case 'commercial':
+        return this.opportunities().length;
+      case 'operations':
+        return dashboard?.activeUsers ?? 0;
+      case 'invitations':
+        return this.invitedOpportunities().length;
+      case 'keywords':
+        return this.activeKeywordCount();
+      case 'workflows':
+        return this.workflowSummaries().length;
+    }
+  }
+
+  protected getModuleMetricLabel(view: CrmView): string {
+    switch (view) {
+      case 'dashboard':
+        return 'procesos visibles';
+      case 'commercial':
+        return 'procesos filtrados';
+      case 'operations':
+        return 'usuarios activos';
+      case 'invitations':
+        return 'invitaciones confirmadas';
+      case 'keywords':
+        return 'reglas activas';
+      case 'workflows':
+        return 'workflows disponibles';
+    }
+  }
+
   protected async reloadAll(): Promise<void> {
     this.loading.set(true);
     this.errorMessage.set('');
@@ -220,7 +344,11 @@ export class App {
       this.workflowSummaries.set(workflowSummaries);
       this.opportunities.set(opportunities);
 
-      await this.ensureSelectedWorkflow(workflowSummaries);
+      this.syncWorkflowSummarySelection(workflowSummaries);
+      if (this.currentView() === 'workflows') {
+        await this.ensureWorkflowDetailLoaded();
+      }
+
       await this.syncOpportunitySelection(opportunities, false);
     } catch (error) {
       this.handleError(error, 'No se pudo cargar el CRM.');
@@ -575,7 +703,30 @@ export class App {
     }
   }
 
-  private async ensureSelectedWorkflow(workflowSummaries: WorkflowSummary[]): Promise<void> {
+  protected isOlderThanOneDay(item: OpportunityListItem): boolean {
+    const publishedDateKey = this.extractDateKey(item.fechaPublicacion);
+    if (!publishedDateKey) {
+      return false;
+    }
+
+    return this.dateKeyToDayIndex(this.getTodayDateKey()) - this.dateKeyToDayIndex(publishedDateKey) > 1;
+  }
+
+  protected getOpportunityAgeLabel(item: OpportunityListItem): string {
+    if (!this.isOlderThanOneDay(item)) {
+      return '0-1 dia';
+    }
+
+    const publishedDateKey = this.extractDateKey(item.fechaPublicacion);
+    if (!publishedDateKey) {
+      return '+1 dia';
+    }
+
+    const diff = this.dateKeyToDayIndex(this.getTodayDateKey()) - this.dateKeyToDayIndex(publishedDateKey);
+    return `+${diff} dias`;
+  }
+
+  private syncWorkflowSummarySelection(workflowSummaries: WorkflowSummary[]): void {
     const selectedId = this.selectedWorkflowId();
     const workflowId = selectedId && workflowSummaries.some((workflow) => workflow.id === selectedId)
       ? selectedId
@@ -583,11 +734,28 @@ export class App {
 
     this.selectedWorkflowId.set(workflowId);
 
-    if (workflowId) {
-      await this.loadWorkflowDetail(workflowId);
-    } else {
+    if (!workflowId) {
+      this.selectedWorkflow.set(null);
+      return;
+    }
+
+    if (this.selectedWorkflow()?.id !== workflowId) {
       this.selectedWorkflow.set(null);
     }
+  }
+
+  private async ensureWorkflowDetailLoaded(): Promise<void> {
+    const workflowId = this.selectedWorkflowId();
+    if (!workflowId) {
+      this.selectedWorkflow.set(null);
+      return;
+    }
+
+    if (this.selectedWorkflow()?.id === workflowId) {
+      return;
+    }
+
+    await this.loadWorkflowDetail(workflowId);
   }
 
   private async loadWorkflowDetail(id: string): Promise<void> {
@@ -648,14 +816,14 @@ export class App {
     estado?: string;
     zoneId?: number | null;
     assignedUserId?: number | null;
-    invitedOnly: boolean;
+    todayOnly: boolean;
   } {
     return {
       search: this.filters.search.trim() || undefined,
       estado: this.filters.estado || undefined,
       zoneId: this.filters.zoneId ? Number(this.filters.zoneId) : null,
       assignedUserId: this.filters.assignedUserId ? Number(this.filters.assignedUserId) : null,
-      invitedOnly: this.filters.invitedOnly,
+      todayOnly: this.filters.todayOnly,
     };
   }
 
@@ -664,14 +832,14 @@ export class App {
     estado: string;
     zoneId: string;
     assignedUserId: string;
-    invitedOnly: boolean;
+    todayOnly: boolean;
   } {
     return {
       search: '',
       estado: '',
       zoneId: '',
       assignedUserId: '',
-      invitedOnly: false,
+      todayOnly: false,
     };
   }
 
@@ -680,7 +848,7 @@ export class App {
     estado: string;
     zoneId: string;
     assignedUserId: string;
-    invitedOnly: boolean;
+    todayOnly: boolean;
   } {
     const fallback = this.createDefaultOpportunityFilters();
 
@@ -696,7 +864,7 @@ export class App {
         estado: typeof parsed.estado === 'string' ? parsed.estado : fallback.estado,
         zoneId: typeof parsed.zoneId === 'string' ? parsed.zoneId : fallback.zoneId,
         assignedUserId: typeof parsed.assignedUserId === 'string' ? parsed.assignedUserId : fallback.assignedUserId,
-        invitedOnly: typeof parsed.invitedOnly === 'boolean' ? parsed.invitedOnly : fallback.invitedOnly,
+        todayOnly: typeof parsed.todayOnly === 'boolean' ? parsed.todayOnly : fallback.todayOnly,
       };
     } catch {
       return fallback;
@@ -709,6 +877,38 @@ export class App {
     } catch {
       // Ignore storage failures and keep filters in memory.
     }
+  }
+
+  private getTodayDateKey(): string {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+  }
+
+  private extractDateKey(value: string | null | undefined): string {
+    const raw = String(value ?? '').trim();
+    if (!raw) {
+      return '';
+    }
+
+    const isoMatch = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return isoMatch[0];
+    }
+
+    const latinMatch = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (latinMatch) {
+      return `${latinMatch[3]}-${latinMatch[2]}-${latinMatch[1]}`;
+    }
+
+    const parsed = Date.parse(raw);
+    if (!Number.isFinite(parsed)) {
+      return '';
+    }
+
+    return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
+  }
+
+  private dateKeyToDayIndex(value: string): number {
+    return Math.floor(Date.parse(`${value}T00:00:00Z`) / 86_400_000);
   }
 
   private formatJson(value: string | null | undefined): string {

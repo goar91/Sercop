@@ -52,7 +52,7 @@ try {
 
     Invoke-Psql 'postgres' "GRANT ALL PRIVILEGES ON DATABASE $appDb TO $appUser;"
 
-    foreach ($scriptName in @('001_schema.sql', '002_invitation_filter.sql', '004_url_fix.sql', '003_crm.sql', '005_permissions.sql', '006_performance_indexes.sql', '007_keyword_rules_management.sql', '008_invitation_tracking.sql')) {
+    foreach ($scriptName in @('001_schema.sql', '002_invitation_filter.sql', '004_url_fix.sql', '003_crm.sql', '005_permissions.sql', '006_performance_indexes.sql', '007_keyword_rules_management.sql', '008_invitation_tracking.sql', '009_supply_filter_rules.sql', '010_exclude_medical_rules.sql')) {
         $scriptPath = Join-Path $root "database\init\$scriptName"
         if (-not (Test-Path $scriptPath)) {
             throw "No se encontro el script $scriptPath"

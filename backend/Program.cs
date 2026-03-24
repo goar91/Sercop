@@ -210,11 +210,12 @@ app.MapGet("/api/opportunities", async (
     string? estado,
     long? zoneId,
     long? assignedUserId,
-    bool invitedOnly,
+    bool? invitedOnly,
+    bool? todayOnly,
     CrmRepository repository,
     CancellationToken cancellationToken) =>
 {
-    var items = await repository.GetOpportunitiesAsync(search, estado, zoneId, assignedUserId, invitedOnly, cancellationToken);
+    var items = await repository.GetOpportunitiesAsync(search, estado, zoneId, assignedUserId, invitedOnly ?? false, todayOnly ?? true, cancellationToken);
     return Results.Ok(items);
 });
 
