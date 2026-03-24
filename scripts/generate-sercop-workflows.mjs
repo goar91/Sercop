@@ -278,6 +278,15 @@ function hasNoiseSignal(haystack) {
     /\bsaran\b/i,
     /marmitas?/i,
     /agitaci[oó]n/i,
+    /herramient/i,
+    /ferreter/i,
+    /campanas? de extracci[oó]n/i,
+    /adquirir equipos?/i,
+    /equipos?\s+para/i,
+    /\bmuflas?\b/i,
+    /\bestufas?\b/i,
+    /celdas? electroqu[ií]mic/i,
+    /analizador/i,
     /insumos generales/i,
     /equipos? de laboratorio/i,
     /adquisi(?:ci[oó]n)? de equipos?/i,
@@ -332,6 +341,71 @@ function hasMedicalSignal(haystack) {
 }
 `;
 
+const ecuadorTimestampCode = String.raw`
+const ecuadorTimeZone = 'America/Guayaquil';
+const ecuadorOffsetSuffix = '-05:00';
+
+function formatDateInEcuador(date) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: ecuadorTimeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    })
+      .formatToParts(date)
+      .filter(({ type }) => type !== 'literal')
+      .map(({ type, value }) => [type, value]),
+  );
+
+  return parts.year + '-' + parts.month + '-' + parts.day + 'T' + parts.hour + ':' + parts.minute + ':' + parts.second + ecuadorOffsetSuffix;
+}
+
+function normalizeEcuadorTimestamp(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return '';
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw + 'T00:00:00' + ecuadorOffsetSuffix;
+  }
+
+  const isoLocalMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d{1,3})?)?$/);
+  if (isoLocalMatch) {
+    const [, year, month, day, hour = '00', minute = '00', second = '00'] = isoLocalMatch;
+    return year + '-' + month + '-' + day + 'T' + hour + ':' + minute + ':' + second + ecuadorOffsetSuffix;
+  }
+
+  const latinMatch = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (latinMatch) {
+    const [, day, month, year, hour = '00', minute = '00', second = '00'] = latinMatch;
+    return year + '-' + month + '-' + day + 'T' + hour + ':' + minute + ':' + second + ecuadorOffsetSuffix;
+  }
+
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) {
+    return '';
+  }
+
+  return formatDateInEcuador(new Date(parsed));
+}
+
+function extractDateKey(value) {
+  const normalized = normalizeEcuadorTimestamp(value);
+  return normalized ? normalized.slice(0, 10) : '';
+}
+
+function isCurrentDate(...values) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: ecuadorTimeZone });
+  return values.some((value) => extractDateKey(value) === today);
+}
+`;
+
 const ocdsNormalizeSearchResultsCode = `const threshold = Number($env.MATCH_THRESHOLD || 60);
 const rules = $items('Load Keyword Rules').map((item) => item.json);
 const includeRules = rules.filter((rule) => String(rule.rule_type || '') === 'include');
@@ -381,6 +455,7 @@ function normalizeText(value) {
 }
 
 ${chemistrySupplyGateCode}
+${ecuadorTimestampCode}
 
 function uniqueHits(rawHits) {
   const deduped = new Map();
@@ -432,35 +507,6 @@ function typeScore(processType) {
 function parseDateScore(value) {
   const timestamp = Date.parse(String(value || ''));
   return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function extractDateKey(value) {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
-  if (isoMatch) {
-    return isoMatch[0];
-  }
-
-  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
-  if (latinMatch) {
-    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
-  }
-
-  const parsed = Date.parse(raw);
-  if (!Number.isFinite(parsed)) {
-    return '';
-  }
-
-  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-}
-
-function isCurrentDate(...values) {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-  return values.some((value) => extractDateKey(value) === today);
 }
 
 const inputs = $input.all();
@@ -616,6 +662,7 @@ function normalizeProcessCode(value) {
 }
 
 ${chemistrySupplyGateCode}
+${ecuadorTimestampCode}
 
 function typeScore(processType) {
   const normalized = String(processType || '').trim();
@@ -624,35 +671,6 @@ function typeScore(processType) {
   }
 
   return typeWeights[normalized] ?? (normalized ? 15 : 10);
-}
-
-function extractDateKey(value) {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
-  if (isoMatch) {
-    return isoMatch[0];
-  }
-
-  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
-  if (latinMatch) {
-    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
-  }
-
-  const parsed = Date.parse(raw);
-  if (!Number.isFinite(parsed)) {
-    return '';
-  }
-
-  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-}
-
-function isCurrentDate(...values) {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-  return values.some((value) => extractDateKey(value) === today);
 }
 
 function uniqueHits(rawHits) {
@@ -772,8 +790,8 @@ for (const input of $input.all()) {
       titulo_sql: sqlText(title),
       entidad_sql: sqlText(entity),
       tipo_sql: sqlText(processType),
-      fecha_publicacion_sql: sqlText(publishedAt),
-      fecha_limite_sql: sqlText(deadlineAt),
+      fecha_publicacion_sql: sqlText(normalizeEcuadorTimestamp(publishedAt)),
+      fecha_limite_sql: sqlText(normalizeEcuadorTimestamp(deadlineAt)),
       monto_ref_sql: sqlNumber(amount),
       moneda_sql: sqlText(currency || 'USD'),
       url_sql: sqlText(candidate.url),
@@ -796,6 +814,7 @@ function normalizeText(value) {
 }
 
 ${chemistrySupplyGateCode}
+${ecuadorTimestampCode}
 
 function uniqueHits(rawHits) {
   const deduped = new Map();
@@ -836,35 +855,6 @@ function parseDetailUrl(anchorHtml) {
 function parseDateScore(value) {
   const timestamp = Date.parse(String(value || ''));
   return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function extractDateKey(value) {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
-  if (isoMatch) {
-    return isoMatch[0];
-  }
-
-  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
-  if (latinMatch) {
-    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
-  }
-
-  const parsed = Date.parse(raw);
-  if (!Number.isFinite(parsed)) {
-    return '';
-  }
-
-  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-}
-
-function isCurrentDate(...values) {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-  return values.some((value) => extractDateKey(value) === today);
 }
 
 function typeScore(processType) {
@@ -1009,6 +999,7 @@ function normalizeText(value) {
 }
 
 ${chemistrySupplyGateCode}
+${ecuadorTimestampCode}
 
 function stripHtml(value) {
   return String(value ?? '')
@@ -1050,35 +1041,6 @@ function typeScore(processType) {
   }
 
   return 15;
-}
-
-function extractDateKey(value) {
-  const raw = String(value || '').trim();
-  if (!raw) {
-    return '';
-  }
-
-  const isoMatch = raw.match(/(\\d{4})-(\\d{2})-(\\d{2})/);
-  if (isoMatch) {
-    return isoMatch[0];
-  }
-
-  const latinMatch = raw.match(/(\\d{2})\\/(\\d{2})\\/(\\d{4})/);
-  if (latinMatch) {
-    return latinMatch[3] + '-' + latinMatch[2] + '-' + latinMatch[1];
-  }
-
-  const parsed = Date.parse(raw);
-  if (!Number.isFinite(parsed)) {
-    return '';
-  }
-
-  return new Date(parsed).toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-}
-
-function isCurrentDate(...values) {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Guayaquil' });
-  return values.some((value) => extractDateKey(value) === today);
 }
 
 const out = [];
@@ -1177,8 +1139,8 @@ for (let index = 0; index < inputs.length; index++) {
       titulo_sql: sqlText(candidate.titulo),
       entidad_sql: sqlText(candidate.entidad),
       tipo_sql: sqlText(candidate.tipo),
-      fecha_publicacion_sql: sqlText(candidate.fecha_publicacion),
-      fecha_limite_sql: sqlText(candidate.fecha_limite),
+      fecha_publicacion_sql: sqlText(normalizeEcuadorTimestamp(candidate.fecha_publicacion)),
+      fecha_limite_sql: sqlText(normalizeEcuadorTimestamp(candidate.fecha_limite)),
       monto_ref_sql: sqlNumber(candidate.monto_ref),
       moneda_sql: sqlText(candidate.moneda || 'USD'),
       url_sql: sqlText(candidate.url),

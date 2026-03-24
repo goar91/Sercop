@@ -270,7 +270,7 @@ public sealed class SercopPublicClient(HttpClient httpClient)
     }
 
     private static DateTimeOffset? ParseDateTimeOffset(string? value)
-        => DateTimeOffset.TryParse(value, out var parsed) ? parsed : null;
+        => EcuadorTime.ParseTimestamp(value);
 
     private static decimal? ParseDecimal(string? value)
         => decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed)

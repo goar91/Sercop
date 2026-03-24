@@ -106,6 +106,7 @@ public sealed class SercopInvitationPublicClient(HttpClient httpClient)
     {
         await InitializePublicSearchSessionAsync(cancellationToken);
 
+        var today = EcuadorTime.Now().Date;
         var form = new Dictionary<string, string>
         {
             ["__class"] = "SolicitudCompra",
@@ -115,8 +116,8 @@ public sealed class SercopInvitationPublicClient(HttpClient httpClient)
             ["cmbEntidad"] = string.Empty,
             ["txtCodigoTipoCompra"] = MapPublicProcessType(processType) ?? string.Empty,
             ["txtCodigoProceso"] = processCode ?? string.Empty,
-            ["f_inicio"] = DateTime.UtcNow.AddYears(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            ["f_fin"] = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["f_inicio"] = today.AddYears(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["f_fin"] = today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ["image"] = string.Empty,
             ["captccc2"] = "2",
             ["paginaActual"] = "0",

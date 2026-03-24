@@ -9,6 +9,10 @@ import {
   DashboardSummary,
   InvitationSyncResult,
   KeywordRule,
+  ManagementAreaWin,
+  ManagementReport,
+  ManagementSellerPerformance,
+  ManagementStageMetric,
   MetaInfo,
   OpportunityDetail,
   OpportunityListItem,
@@ -18,7 +22,7 @@ import {
   Zone,
 } from './models';
 
-type CrmView = 'dashboard' | 'commercial' | 'operations' | 'invitations' | 'keywords' | 'workflows';
+type CrmView = 'dashboard' | 'management' | 'commercial' | 'operations' | 'invitations' | 'keywords' | 'workflows';
 
 @Component({
   selector: 'app-root',
@@ -42,6 +46,12 @@ export class App {
       label: 'Dashboard',
       title: 'Vista general',
       description: 'Resumen ejecutivo y accesos directos al CRM.',
+    },
+    {
+      id: 'management',
+      label: 'Gerencia',
+      title: 'Reporte gerencial',
+      description: 'Resumen ejecutivo, barras por vendedor y areas ganadas.',
     },
     {
       id: 'commercial',
@@ -78,6 +88,7 @@ export class App {
   protected readonly currentView = signal<CrmView>('dashboard');
   protected readonly meta = signal<MetaInfo | null>(null);
   protected readonly dashboard = signal<DashboardSummary | null>(null);
+  protected readonly managementReport = signal<ManagementReport | null>(null);
   protected readonly opportunities = signal<OpportunityListItem[]>([]);
   protected readonly invitedOpportunities = computed(() => this.opportunities().filter((item) => item.isInvitedMatch));
   protected readonly currentChemicalOpportunities = computed(() => this.opportunities().filter(
@@ -96,12 +107,14 @@ export class App {
   protected readonly selectedWorkflow = signal<WorkflowDetail | null>(null);
   protected readonly activeWorkflowCount = computed(() => this.workflowSummaries().filter((workflow) => workflow.active).length);
   protected readonly activeKeywordCount = computed(() => this.keywordRules().filter((rule) => rule.active).length);
-  protected readonly formattedRawPayload = computed(() => {
-    const detail = this.selectedOpportunity();
-    return detail ? this.formatJson(detail.rawPayloadJson) : '';
-  });
   protected readonly dashboardStatuses = computed(() => (this.dashboard()?.statuses ?? []).slice(0, 6));
   protected readonly dashboardZoneLoads = computed(() => (this.dashboard()?.zoneLoads ?? []).slice(0, 6));
+  protected readonly managementSummary = computed(() => this.managementReport()?.summary ?? null);
+  protected readonly managementPipeline = computed(() => this.managementReport()?.pipeline ?? []);
+  protected readonly managementSellerRows = computed(() => this.managementReport()?.sellers ?? []);
+  protected readonly managementWinningAreas = computed(() => this.managementReport()?.winningAreas ?? []);
+  protected readonly maxManagementPipelineCount = computed(() => this.getMaxCount(this.managementPipeline()));
+  protected readonly maxManagementAreaWins = computed(() => this.getMaxCount(this.managementWinningAreas().map((item) => ({ count: item.wonCount }))));
   protected readonly dashboardSpotlights = computed(() => {
     const result: OpportunityListItem[] = [];
     const seen = new Set<number>();
@@ -194,6 +207,7 @@ export class App {
   protected readonly savingZone = signal(false);
   protected readonly savingUser = signal(false);
   protected readonly savingKeyword = signal(false);
+  protected readonly deletingKeywordId = signal<number | null>(null);
   protected readonly errorMessage = signal('');
   protected readonly successMessage = signal('');
   protected readonly invitationImportResult = signal<BulkInvitationImportResult | null>(null);
@@ -290,6 +304,8 @@ export class App {
         return dashboard?.totalOpportunities ?? 0;
       case 'commercial':
         return this.opportunities().length;
+      case 'management':
+        return this.managementSummary()?.wonOpportunities ?? 0;
       case 'operations':
         return dashboard?.activeUsers ?? 0;
       case 'invitations':
@@ -307,6 +323,8 @@ export class App {
         return 'procesos visibles';
       case 'commercial':
         return 'procesos filtrados';
+      case 'management':
+        return 'procesos ganados';
       case 'operations':
         return 'usuarios activos';
       case 'invitations':
@@ -326,9 +344,10 @@ export class App {
     this.invitationSyncResult.set(null);
 
     try {
-      const [meta, dashboard, zones, users, keywordRules, workflowSummaries, opportunities] = await Promise.all([
+      const [meta, dashboard, managementReport, zones, users, keywordRules, workflowSummaries, opportunities] = await Promise.all([
         firstValueFrom(this.api.getMeta()),
         firstValueFrom(this.api.getDashboard()),
+        firstValueFrom(this.api.getManagementReport()),
         firstValueFrom(this.api.getZones()),
         firstValueFrom(this.api.getUsers()),
         firstValueFrom(this.api.getKeywordRules()),
@@ -338,6 +357,7 @@ export class App {
 
       this.meta.set(meta);
       this.dashboard.set(dashboard);
+      this.managementReport.set(managementReport);
       this.zones.set(zones);
       this.users.set(users);
       this.keywordRules.set(keywordRules);
@@ -669,6 +689,32 @@ export class App {
     };
   }
 
+  protected async deleteKeyword(rule: KeywordRule): Promise<void> {
+    const confirmed = globalThis.confirm?.(`Se eliminara la regla "${rule.keyword}". Esta accion se guardara en la base de datos. Deseas continuar?`) ?? true;
+    if (!confirmed) {
+      return;
+    }
+
+    this.deletingKeywordId.set(rule.id);
+    this.errorMessage.set('');
+    this.successMessage.set('');
+
+    try {
+      await firstValueFrom(this.api.deleteKeywordRule(rule.id));
+
+      if (this.keywordForm.id === rule.id) {
+        this.resetKeywordForm();
+      }
+
+      this.successMessage.set('Palabra clave eliminada correctamente.');
+      await this.refreshReferenceData();
+    } catch (error) {
+      this.handleError(error, 'No se pudo eliminar la palabra clave.');
+    } finally {
+      this.deletingKeywordId.set(null);
+    }
+  }
+
   protected resetKeywordForm(): void {
     this.keywordForm = {
       id: null,
@@ -787,26 +833,30 @@ export class App {
   }
 
   private async refreshReferenceData(): Promise<void> {
-    const [zones, users, keywordRules, dashboard] = await Promise.all([
+    const [zones, users, keywordRules, dashboard, managementReport] = await Promise.all([
       firstValueFrom(this.api.getZones()),
       firstValueFrom(this.api.getUsers()),
       firstValueFrom(this.api.getKeywordRules()),
       firstValueFrom(this.api.getDashboard()),
+      firstValueFrom(this.api.getManagementReport()),
     ]);
 
     this.zones.set(zones);
     this.users.set(users);
     this.keywordRules.set(keywordRules);
     this.dashboard.set(dashboard);
+    this.managementReport.set(managementReport);
   }
 
   private async refreshSnapshot(): Promise<void> {
-    const [dashboard, opportunities] = await Promise.all([
+    const [dashboard, managementReport, opportunities] = await Promise.all([
       firstValueFrom(this.api.getDashboard()),
+      firstValueFrom(this.api.getManagementReport()),
       firstValueFrom(this.api.getOpportunities(this.getFiltersPayload())),
     ]);
 
     this.dashboard.set(dashboard);
+    this.managementReport.set(managementReport);
     this.opportunities.set(opportunities);
     await this.syncOpportunitySelection(opportunities, false);
   }
@@ -911,16 +961,31 @@ export class App {
     return Math.floor(Date.parse(`${value}T00:00:00Z`) / 86_400_000);
   }
 
-  private formatJson(value: string | null | undefined): string {
-    if (!value) {
-      return '';
+  protected getRelativeBarWidth(value: number, max: number): string {
+    if (max <= 0 || value <= 0) {
+      return '0%';
     }
 
-    try {
-      return JSON.stringify(JSON.parse(value), null, 2);
-    } catch {
-      return value;
+    return `${Math.max(8, Math.min(100, Math.round((value / max) * 100)))}%`;
+  }
+
+  protected getPercentBarWidth(value: number | null | undefined): string {
+    const safeValue = Number(value ?? 0);
+    if (!Number.isFinite(safeValue) || safeValue <= 0) {
+      return '0%';
     }
+
+    return `${Math.min(100, Math.max(8, Math.round(safeValue)))}%`;
+  }
+
+  protected getSalesBasisLabel(): string {
+    return this.managementSummary()?.salesShareBasis === 'monto_ref'
+      ? 'Participacion sobre monto referencial ganado'
+      : 'Participacion sobre procesos ganados';
+  }
+
+  private getMaxCount(items: ReadonlyArray<{ count: number }>): number {
+    return items.reduce((max, item) => Math.max(max, item.count), 0);
   }
 
   private handleError(error: unknown, fallback: string): void {

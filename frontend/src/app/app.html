@@ -197,6 +197,232 @@
     </section>
   }
 
+  @if (currentView() === 'management') {
+    <section class="panel screen-panel management-panel">
+      <div class="panel-header">
+        <div>
+          <p class="eyebrow">Modulo gerencial</p>
+          <h2>Reporte general para gerencia</h2>
+        </div>
+        <span class="chip muted">{{ managementSellerRows().length }} vendedores con gestion</span>
+      </div>
+
+      @if (managementSummary(); as summary) {
+        <section class="management-kpis">
+          <article class="stat-card panel accent">
+            <span>Procesos asignados</span>
+            <strong>{{ summary.assignedOpportunities }}</strong>
+            <small>Carga comercial distribuida entre vendedores.</small>
+          </article>
+
+          <article class="stat-card panel">
+            <span>Participando</span>
+            <strong>{{ summary.participatingOpportunities }}</strong>
+            <small>Procesos activos en gestion o presentacion.</small>
+          </article>
+
+          <article class="stat-card panel">
+            <span>Ganados</span>
+            <strong>{{ summary.wonOpportunities }}</strong>
+            <small>Procesos cerrados con exito.</small>
+          </article>
+
+          <article class="stat-card panel">
+            <span>Acierto global</span>
+            <strong>{{ summary.overallHitRatePercent | number: '1.0-1' }}%</strong>
+            <small>Ganados sobre procesos con resultado definido.</small>
+          </article>
+
+          <article class="stat-card panel">
+            <span>Monto referencial ganado</span>
+            <strong>{{ summary.totalWonAmount | currency: 'USD' }}</strong>
+            <small>{{ getSalesBasisLabel() }}</small>
+          </article>
+        </section>
+
+        <div class="management-grid">
+          <article class="subpanel management-summary-panel">
+            <div class="subpanel-header">
+              <div>
+                <h3>Resumen ejecutivo</h3>
+                <p>Vista consolidada del estado comercial del equipo.</p>
+              </div>
+            </div>
+
+            <div class="management-summary-grid">
+              <article class="management-metric-card">
+                <span>Procesos visibles</span>
+                <strong>{{ summary.totalVisibleOpportunities }}</strong>
+                <small>Base comercial vigente.</small>
+              </article>
+              <article class="management-metric-card">
+                <span>Vendedores activos</span>
+                <strong>{{ summary.activeSellers }}</strong>
+                <small>Equipo con carga asignada.</small>
+              </article>
+              <article class="management-metric-card">
+                <span>Perdidos</span>
+                <strong>{{ summary.lostOpportunities }}</strong>
+                <small>Procesos cerrados sin adjudicacion.</small>
+              </article>
+              <article class="management-metric-card">
+                <span>No presentados</span>
+                <strong>{{ summary.notPresentedOpportunities }}</strong>
+                <small>Casos no enviados por el equipo.</small>
+              </article>
+            </div>
+          </article>
+
+          <article class="subpanel management-pipeline-panel">
+            <div class="subpanel-header">
+              <div>
+                <h3>Pipeline comercial</h3>
+                <p>Distribucion general de procesos por etapa del equipo.</p>
+              </div>
+            </div>
+
+            @if (managementPipeline().length === 0) {
+              <div class="empty-state small">Todavia no hay procesos suficientes para construir el reporte gerencial.</div>
+            } @else {
+              <div class="bar-chart-list">
+                @for (metric of managementPipeline(); track metric.label) {
+                  <div class="chart-row">
+                    <div class="chart-label">
+                      <strong>{{ metric.label }}</strong>
+                      <span>{{ metric.count }} procesos</span>
+                    </div>
+                    <div class="bar-track">
+                      <div class="bar-fill brand" [style.width]="getRelativeBarWidth(metric.count, maxManagementPipelineCount())"></div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </article>
+
+          <article class="subpanel management-sellers-panel">
+            <div class="subpanel-header">
+              <div>
+                <h3>Resumen por vendedor</h3>
+                <p>{{ getSalesBasisLabel() }} y porcentaje de acierto por vendedor.</p>
+              </div>
+            </div>
+
+            @if (managementSellerRows().length === 0) {
+              <div class="empty-state small">Aun no hay vendedores con procesos asignados para mostrar a gerencia.</div>
+            } @else {
+              <div class="seller-performance-list">
+                @for (seller of managementSellerRows(); track seller.sellerName) {
+                  <article class="seller-card">
+                    <div class="seller-card-head">
+                      <div class="seller-card-summary">
+                        <p class="eyebrow">Vendedor</p>
+                        <h3>{{ seller.sellerName }}</h3>
+                        <p>Carga comercial actual del ejecutivo.</p>
+                      </div>
+                      <div class="seller-card-badges">
+                        <span class="chip good">{{ seller.wonCount }} ganados</span>
+                        <span class="chip muted">{{ seller.lostCount }} perdidos</span>
+                      </div>
+                    </div>
+
+                    <div class="seller-metric-grid">
+                      <article class="seller-metric">
+                        <span>Asignados</span>
+                        <strong>{{ seller.assignedCount }}</strong>
+                      </article>
+                      <article class="seller-metric">
+                        <span>Participando</span>
+                        <strong>{{ seller.participatingCount }}</strong>
+                      </article>
+                      <article class="seller-metric">
+                        <span>No presentados</span>
+                        <strong>{{ seller.notPresentedCount }}</strong>
+                      </article>
+                    </div>
+
+                    <div class="seller-bar-stack">
+                      <div class="chart-row compact">
+                        <div class="chart-label">
+                          <strong>Ventas</strong>
+                          <span>{{ seller.salesSharePercent | number: '1.0-1' }}%</span>
+                        </div>
+                        <div class="bar-track">
+                          <div class="bar-fill accent" [style.width]="getPercentBarWidth(seller.salesSharePercent)"></div>
+                        </div>
+                      </div>
+
+                      <div class="chart-row compact">
+                        <div class="chart-label">
+                          <strong>Acierto</strong>
+                          <span>{{ seller.hitRatePercent | number: '1.0-1' }}%</span>
+                        </div>
+                        <div class="bar-track">
+                          <div class="bar-fill success" [style.width]="getPercentBarWidth(seller.hitRatePercent)"></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="seller-card-foot">
+                      <span class="chip muted">Acierto {{ seller.hitRatePercent | number: '1.0-1' }}%</span>
+                      @if (summary.salesShareBasis === 'monto_ref') {
+                        <span class="chip">{{ seller.salesAmount | currency: 'USD' }}</span>
+                      } @else {
+                        <span class="chip">Ventas {{ seller.salesSharePercent | number: '1.0-1' }}%</span>
+                      }
+                    </div>
+
+                    <div class="seller-areas">
+                      <span class="eyebrow">Areas ganadas</span>
+                      @if (seller.winningAreas.length === 0) {
+                        <p>Sin areas ganadas registradas todavia.</p>
+                      } @else {
+                        <div class="keyword-chips">
+                          @for (area of seller.winningAreas; track area) {
+                            <span class="chip source">{{ area }}</span>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </article>
+
+          <article class="subpanel management-areas-panel">
+            <div class="subpanel-header">
+              <div>
+                <h3>Areas quimicas ganadas</h3>
+                <p>Familias o areas con mejor desempeno historico.</p>
+              </div>
+            </div>
+
+            @if (managementWinningAreas().length === 0) {
+              <div class="empty-state small">No hay procesos ganados con area clasificada todavia.</div>
+            } @else {
+              <div class="bar-chart-list">
+                @for (area of managementWinningAreas(); track area.area) {
+                  <div class="chart-row">
+                    <div class="chart-label">
+                      <strong>{{ area.area }}</strong>
+                      <span>{{ area.wonCount }} ganados</span>
+                    </div>
+                    <div class="bar-track">
+                      <div class="bar-fill success" [style.width]="getRelativeBarWidth(area.wonCount, maxManagementAreaWins())"></div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </article>
+        </div>
+      } @else {
+        <div class="empty-state">No se pudo construir el reporte gerencial con la informacion actual.</div>
+      }
+    </section>
+  }
+
   @if (currentView() === 'commercial') {
     <section class="panel screen-panel">
       <div class="panel-header">
@@ -338,50 +564,52 @@
                     <span class="chip good">{{ invitedOpportunities().length }}</span>
                   </div>
 
-                  @if (invitedOpportunities().length === 0) {
-                    <div class="empty-state small">
-                      <div>
-                        <strong>Sin invitaciones confirmadas.</strong>
-                        <p>Este carril se llena con sincronizacion publica o validacion operativa.</p>
+                  <div class="lane-body">
+                    @if (invitedOpportunities().length === 0) {
+                      <div class="empty-state small">
+                        <div>
+                          <strong>Sin invitaciones confirmadas.</strong>
+                          <p>Este carril se llena con sincronizacion publica o validacion operativa.</p>
+                        </div>
                       </div>
-                    </div>
-                  } @else {
-                    @for (item of invitedOpportunities(); track item.id) {
-                      <button
-                        type="button"
-                        class="opportunity-card"
-                        [class.selected]="item.id === selectedOpportunityId()"
-                        (click)="selectOpportunity(item.id)">
-                        <div class="opportunity-topline">
-                          <span class="chip source">{{ item.source }}</span>
-                          <span class="chip good">Invitado</span>
-                        </div>
-
-                        <h3>{{ item.titulo }}</h3>
-                        <p>{{ item.entidad || 'Entidad no informada' }}</p>
-
-                        <div class="opportunity-meta">
-                          <span>{{ item.processCode || item.ocidOrNic }}</span>
-                          <span>{{ item.estado || 'nuevo' }}</span>
-                        </div>
-
-                        <div class="opportunity-scores">
-                          <div>
-                            <small>Fecha</small>
-                            <strong>{{ item.fechaPublicacion || item.fechaLimite || 'Sin fecha' }}</strong>
+                    } @else {
+                      @for (item of invitedOpportunities(); track item.id) {
+                        <button
+                          type="button"
+                          class="opportunity-card"
+                          [class.selected]="item.id === selectedOpportunityId()"
+                          (click)="selectOpportunity(item.id)">
+                          <div class="opportunity-topline">
+                            <span class="chip source">{{ item.source }}</span>
+                            <span class="chip good">Invitado</span>
                           </div>
-                          <div>
-                            <small>Zona</small>
-                            <strong>{{ item.zoneName || 'Pendiente' }}</strong>
+
+                          <h3>{{ item.titulo }}</h3>
+                          <p>{{ item.entidad || 'Entidad no informada' }}</p>
+
+                          <div class="opportunity-meta">
+                            <span>{{ item.processCode || item.ocidOrNic }}</span>
+                            <span>{{ item.estado || 'nuevo' }}</span>
                           </div>
-                          <div>
-                            <small>Vendedor</small>
-                            <strong>{{ item.assignedUserName || 'Sin asignar' }}</strong>
+
+                          <div class="opportunity-scores">
+                            <div>
+                              <small>Fecha</small>
+                              <strong>{{ (item.fechaPublicacion || item.fechaLimite) ? ((item.fechaPublicacion || item.fechaLimite) | date: 'dd/MM/yyyy HH:mm') : 'Sin fecha' }}</strong>
+                            </div>
+                            <div>
+                              <small>Zona</small>
+                              <strong>{{ item.zoneName || 'Pendiente' }}</strong>
+                            </div>
+                            <div>
+                              <small>Vendedor</small>
+                              <strong>{{ item.assignedUserName || 'Sin asignar' }}</strong>
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+                      }
                     }
-                  }
+                  </div>
                 </section>
 
                 <section class="opportunity-lane">
@@ -393,50 +621,52 @@
                     <span class="chip muted">{{ currentChemicalOpportunities().length }}</span>
                   </div>
 
-                  @if (currentChemicalOpportunities().length === 0) {
-                    <div class="empty-state small">
-                      <div>
-                        <strong>No hay procesos recientes en este carril.</strong>
-                        <p>Aqui solo entran insumos y materiales de laboratorio publicados hace 0-1 dia.</p>
+                  <div class="lane-body">
+                    @if (currentChemicalOpportunities().length === 0) {
+                      <div class="empty-state small">
+                        <div>
+                          <strong>No hay procesos recientes en este carril.</strong>
+                          <p>Aqui solo entran insumos y materiales de laboratorio publicados hace 0-1 dia.</p>
+                        </div>
                       </div>
-                    </div>
-                  } @else {
-                    @for (item of currentChemicalOpportunities(); track item.id) {
-                      <button
-                        type="button"
-                        class="opportunity-card"
-                        [class.selected]="item.id === selectedOpportunityId()"
-                        (click)="selectOpportunity(item.id)">
-                        <div class="opportunity-topline">
-                          <span class="chip source">{{ item.source }}</span>
-                          <span class="chip muted">{{ getOpportunityAgeLabel(item) }}</span>
-                        </div>
-
-                        <h3>{{ item.titulo }}</h3>
-                        <p>{{ item.entidad || 'Entidad no informada' }}</p>
-
-                        <div class="opportunity-meta">
-                          <span>{{ item.processCode || item.ocidOrNic }}</span>
-                          <span>{{ item.estado || 'nuevo' }}</span>
-                        </div>
-
-                        <div class="opportunity-scores">
-                          <div>
-                            <small>Fecha</small>
-                            <strong>{{ item.fechaPublicacion || item.fechaLimite || 'Sin fecha' }}</strong>
+                    } @else {
+                      @for (item of currentChemicalOpportunities(); track item.id) {
+                        <button
+                          type="button"
+                          class="opportunity-card"
+                          [class.selected]="item.id === selectedOpportunityId()"
+                          (click)="selectOpportunity(item.id)">
+                          <div class="opportunity-topline">
+                            <span class="chip source">{{ item.source }}</span>
+                            <span class="chip muted">{{ getOpportunityAgeLabel(item) }}</span>
                           </div>
-                          <div>
-                            <small>Zona</small>
-                            <strong>{{ item.zoneName || 'Pendiente' }}</strong>
+
+                          <h3>{{ item.titulo }}</h3>
+                          <p>{{ item.entidad || 'Entidad no informada' }}</p>
+
+                          <div class="opportunity-meta">
+                            <span>{{ item.processCode || item.ocidOrNic }}</span>
+                            <span>{{ item.estado || 'nuevo' }}</span>
                           </div>
-                          <div>
-                            <small>Vendedor</small>
-                            <strong>{{ item.assignedUserName || 'Sin asignar' }}</strong>
+
+                          <div class="opportunity-scores">
+                            <div>
+                              <small>Fecha</small>
+                              <strong>{{ (item.fechaPublicacion || item.fechaLimite) ? ((item.fechaPublicacion || item.fechaLimite) | date: 'dd/MM/yyyy HH:mm') : 'Sin fecha' }}</strong>
+                            </div>
+                            <div>
+                              <small>Zona</small>
+                              <strong>{{ item.zoneName || 'Pendiente' }}</strong>
+                            </div>
+                            <div>
+                              <small>Vendedor</small>
+                              <strong>{{ item.assignedUserName || 'Sin asignar' }}</strong>
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+                      }
                     }
-                  }
+                  </div>
                 </section>
 
                 <section class="opportunity-lane">
@@ -448,50 +678,52 @@
                     <span class="chip muted">{{ staleChemicalOpportunities().length }}</span>
                   </div>
 
-                  @if (staleChemicalOpportunities().length === 0) {
-                    <div class="empty-state small">
-                      <div>
-                        <strong>Sin backlog mayor a un dia.</strong>
-                        <p>Este carril concentra procesos que ya requieren seguimiento sostenido.</p>
+                  <div class="lane-body">
+                    @if (staleChemicalOpportunities().length === 0) {
+                      <div class="empty-state small">
+                        <div>
+                          <strong>Sin backlog mayor a un dia.</strong>
+                          <p>Este carril concentra procesos que ya requieren seguimiento sostenido.</p>
+                        </div>
                       </div>
-                    </div>
-                  } @else {
-                    @for (item of staleChemicalOpportunities(); track item.id) {
-                      <button
-                        type="button"
-                        class="opportunity-card"
-                        [class.selected]="item.id === selectedOpportunityId()"
-                        (click)="selectOpportunity(item.id)">
-                        <div class="opportunity-topline">
-                          <span class="chip source">{{ item.source }}</span>
-                          <span class="chip muted">{{ getOpportunityAgeLabel(item) }}</span>
-                        </div>
-
-                        <h3>{{ item.titulo }}</h3>
-                        <p>{{ item.entidad || 'Entidad no informada' }}</p>
-
-                        <div class="opportunity-meta">
-                          <span>{{ item.processCode || item.ocidOrNic }}</span>
-                          <span>{{ item.estado || 'nuevo' }}</span>
-                        </div>
-
-                        <div class="opportunity-scores">
-                          <div>
-                            <small>Fecha</small>
-                            <strong>{{ item.fechaPublicacion || item.fechaLimite || 'Sin fecha' }}</strong>
+                    } @else {
+                      @for (item of staleChemicalOpportunities(); track item.id) {
+                        <button
+                          type="button"
+                          class="opportunity-card"
+                          [class.selected]="item.id === selectedOpportunityId()"
+                          (click)="selectOpportunity(item.id)">
+                          <div class="opportunity-topline">
+                            <span class="chip source">{{ item.source }}</span>
+                            <span class="chip muted">{{ getOpportunityAgeLabel(item) }}</span>
                           </div>
-                          <div>
-                            <small>Zona</small>
-                            <strong>{{ item.zoneName || 'Pendiente' }}</strong>
+
+                          <h3>{{ item.titulo }}</h3>
+                          <p>{{ item.entidad || 'Entidad no informada' }}</p>
+
+                          <div class="opportunity-meta">
+                            <span>{{ item.processCode || item.ocidOrNic }}</span>
+                            <span>{{ item.estado || 'nuevo' }}</span>
                           </div>
-                          <div>
-                            <small>Vendedor</small>
-                            <strong>{{ item.assignedUserName || 'Sin asignar' }}</strong>
+
+                          <div class="opportunity-scores">
+                            <div>
+                              <small>Fecha</small>
+                              <strong>{{ (item.fechaPublicacion || item.fechaLimite) ? ((item.fechaPublicacion || item.fechaLimite) | date: 'dd/MM/yyyy HH:mm') : 'Sin fecha' }}</strong>
+                            </div>
+                            <div>
+                              <small>Zona</small>
+                              <strong>{{ item.zoneName || 'Pendiente' }}</strong>
+                            </div>
+                            <div>
+                              <small>Vendedor</small>
+                              <strong>{{ item.assignedUserName || 'Sin asignar' }}</strong>
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+                      }
                     }
-                  }
+                  </div>
                 </section>
               </div>
             }
@@ -659,35 +891,6 @@
                 </article>
               </section>
 
-              <section class="support-grid">
-                <article class="subpanel">
-                  <div class="subpanel-header">
-                    <h3>Documentos fuente</h3>
-                    <span class="chip muted">{{ detail.documents.length }} archivos</span>
-                  </div>
-
-                  @if (detail.documents.length === 0) {
-                    <div class="empty-state small">No hay documentos descargados para este proceso.</div>
-                  } @else {
-                    <div class="document-list">
-                      @for (document of detail.documents; track document.id) {
-                        <div class="document-item">
-                          <a [href]="document.sourceUrl" target="_blank" rel="noopener">{{ document.sourceUrl }}</a>
-                          <small>{{ document.chunkCount }} chunks</small>
-                        </div>
-                      }
-                    </div>
-                  }
-                </article>
-
-                <article class="subpanel">
-                  <div class="subpanel-header">
-                    <h3>Payload crudo</h3>
-                    <span class="chip muted">SERCOP / n8n</span>
-                  </div>
-                  <pre>{{ formattedRawPayload() }}</pre>
-                </article>
-              </section>
             } @else {
               <div class="empty-state">Selecciona un proceso del tablero para ver su ficha comercial.</div>
             }
@@ -1050,7 +1253,7 @@
 
           <div class="table-list">
             @for (rule of filteredKeywordRules(); track rule.id) {
-              <button type="button" class="table-row interactive keyword-row" (click)="editKeyword(rule)">
+              <article class="table-row interactive keyword-row">
                 <div class="stack">
                   <strong>{{ rule.keyword }}</strong>
                   <div class="keyword-chips">
@@ -1063,8 +1266,18 @@
                   </div>
                   <p>{{ rule.notes || 'Sin notas' }}</p>
                 </div>
-                <span class="chip" [class.good]="rule.active">{{ rule.active ? 'Activa' : 'Inactiva' }}</span>
-              </button>
+                <div class="keyword-row-actions">
+                  <span class="chip" [class.good]="rule.active">{{ rule.active ? 'Activa' : 'Inactiva' }}</span>
+                  <button type="button" class="ghost compact-action" (click)="editKeyword(rule)">Editar</button>
+                  <button
+                    type="button"
+                    class="danger-ghost compact-action"
+                    [disabled]="deletingKeywordId() === rule.id"
+                    (click)="deleteKeyword(rule)">
+                    {{ deletingKeywordId() === rule.id ? 'Eliminando...' : 'Eliminar' }}
+                  </button>
+                </div>
+              </article>
             }
           </div>
         </article>

@@ -21,6 +21,50 @@ export interface DashboardSummary {
   zoneLoads: ZoneLoad[];
 }
 
+export interface ManagementSummary {
+  totalVisibleOpportunities: number;
+  assignedOpportunities: number;
+  participatingOpportunities: number;
+  wonOpportunities: number;
+  lostOpportunities: number;
+  notPresentedOpportunities: number;
+  activeSellers: number;
+  overallHitRatePercent: number;
+  totalWonAmount: number;
+  salesShareBasis: string;
+}
+
+export interface ManagementStageMetric {
+  label: string;
+  count: number;
+}
+
+export interface ManagementSellerPerformance {
+  sellerId?: number | null;
+  sellerName: string;
+  assignedCount: number;
+  participatingCount: number;
+  wonCount: number;
+  lostCount: number;
+  notPresentedCount: number;
+  salesAmount: number;
+  salesSharePercent: number;
+  hitRatePercent: number;
+  winningAreas: string[];
+}
+
+export interface ManagementAreaWin {
+  area: string;
+  wonCount: number;
+}
+
+export interface ManagementReport {
+  summary: ManagementSummary;
+  pipeline: ManagementStageMetric[];
+  sellers: ManagementSellerPerformance[];
+  winningAreas: ManagementAreaWin[];
+}
+
 export interface OpportunityListItem {
   id: number;
   source: string;
@@ -46,16 +90,6 @@ export interface OpportunityListItem {
   priority: string;
   zoneName?: string | null;
   assignedUserName?: string | null;
-}
-
-export interface OpportunityDocument {
-  id: number;
-  sourceUrl: string;
-  localPath?: string | null;
-  mimeType?: string | null;
-  sha256?: string | null;
-  chunkCount: number;
-  createdAt: string;
 }
 
 export interface AssignmentHistoryItem {
@@ -105,14 +139,6 @@ export interface OpportunityDetail {
   assignedUserId?: number | null;
   assignedUserName?: string | null;
   assignedUserEmail?: string | null;
-  aiResumen?: string | null;
-  aiRiesgosJson: string;
-  aiChecklistJson: string;
-  aiEstrategiaAbastecimiento?: string | null;
-  aiListaCotizacionJson: string;
-  aiPreguntasAbiertasJson: string;
-  rawPayloadJson: string;
-  documents: OpportunityDocument[];
   assignmentHistory: AssignmentHistoryItem[];
 }
 

@@ -7,6 +7,7 @@ import {
   InvitationSyncResult,
   KeywordRule,
   KeywordRuleUpsertRequest,
+  ManagementReport,
   MetaInfo,
   OpportunityAssignmentRequest,
   OpportunityDetail,
@@ -31,6 +32,10 @@ export class CrmApiService {
 
   getDashboard() {
     return this.http.get<DashboardSummary>(`${this.baseUrl}/dashboard`);
+  }
+
+  getManagementReport() {
+    return this.http.get<ManagementReport>(`${this.baseUrl}/management/report`);
   }
 
   getOpportunities(filters: {
@@ -131,6 +136,10 @@ export class CrmApiService {
 
   updateKeywordRule(id: number, payload: KeywordRuleUpsertRequest) {
     return this.http.put<KeywordRule>(`${this.baseUrl}/keywords/${id}`, payload);
+  }
+
+  deleteKeywordRule(id: number) {
+    return this.http.delete<void>(`${this.baseUrl}/keywords/${id}`);
   }
 
   getWorkflows() {

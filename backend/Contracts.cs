@@ -43,16 +43,6 @@ public sealed record OpportunityListItemDto(
     string? AssignedUserName
 );
 
-public sealed record OpportunityDocumentDto(
-    long Id,
-    string SourceUrl,
-    string? LocalPath,
-    string? MimeType,
-    string? Sha256,
-    int ChunkCount,
-    DateTimeOffset CreatedAt
-);
-
 public sealed record AssignmentHistoryItemDto(
     long Id,
     long? AssignedUserId,
@@ -100,14 +90,6 @@ public sealed record OpportunityDetailDto(
     long? AssignedUserId,
     string? AssignedUserName,
     string? AssignedUserEmail,
-    string? AiResumen,
-    string AiRiesgosJson,
-    string AiChecklistJson,
-    string? AiEstrategiaAbastecimiento,
-    string AiListaCotizacionJson,
-    string AiPreguntasAbiertasJson,
-    string RawPayloadJson,
-    IReadOnlyList<OpportunityDocumentDto> Documents,
     IReadOnlyList<AssignmentHistoryItemDto> AssignmentHistory
 );
 
@@ -230,4 +212,48 @@ public sealed record MetaDto(
     string StorageTarget,
     string? ResponsibleEmail,
     string InvitedCompanyName
+);
+
+public sealed record ManagementSummaryDto(
+    int TotalVisibleOpportunities,
+    int AssignedOpportunities,
+    int ParticipatingOpportunities,
+    int WonOpportunities,
+    int LostOpportunities,
+    int NotPresentedOpportunities,
+    int ActiveSellers,
+    decimal OverallHitRatePercent,
+    decimal TotalWonAmount,
+    string SalesShareBasis
+);
+
+public sealed record ManagementStageMetricDto(
+    string Label,
+    int Count
+);
+
+public sealed record ManagementSellerPerformanceDto(
+    long? SellerId,
+    string SellerName,
+    int AssignedCount,
+    int ParticipatingCount,
+    int WonCount,
+    int LostCount,
+    int NotPresentedCount,
+    decimal SalesAmount,
+    decimal SalesSharePercent,
+    decimal HitRatePercent,
+    IReadOnlyList<string> WinningAreas
+);
+
+public sealed record ManagementAreaWinDto(
+    string Area,
+    int WonCount
+);
+
+public sealed record ManagementReportDto(
+    ManagementSummaryDto Summary,
+    IReadOnlyList<ManagementStageMetricDto> Pipeline,
+    IReadOnlyList<ManagementSellerPerformanceDto> Sellers,
+    IReadOnlyList<ManagementAreaWinDto> WinningAreas
 );

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.FileProviders;
+using System.Net.Mail;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -89,6 +90,19 @@ app.UseExceptionHandler(exceptionApp =>
         var logger = loggerFactory.CreateLogger("GlobalException");
         var feature = context.Features.Get<IExceptionHandlerFeature>();
         logger.LogError(feature?.Error, "Unhandled exception for {Path}", context.Request.Path);
+
+        if (feature?.Error is PostgresException postgresException)
+        {
+            var (statusCode, title, detail) = MapPostgresException(postgresException);
+            context.Response.StatusCode = statusCode;
+            context.Response.ContentType = "application/problem+json";
+
+            await Results.Problem(
+                title: title,
+                detail: detail,
+                statusCode: statusCode).ExecuteAsync(context);
+            return;
+        }
 
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/problem+json";
@@ -179,7 +193,7 @@ app.MapGet("/api/health", () => Results.Ok(new
 {
     status = "ok",
     service = "sercop-crm-api",
-    timestamp = DateTimeOffset.UtcNow,
+    timestamp = EcuadorTime.Now(),
     frontend = hasFrontend ? "served" : "missing-build"
 }));
 
@@ -205,6 +219,12 @@ app.MapGet("/api/dashboard", async (CrmRepository repository, CancellationToken 
     return Results.Ok(summary);
 });
 
+app.MapGet("/api/management/report", async (CrmRepository repository, CancellationToken cancellationToken) =>
+{
+    var report = await repository.GetManagementReportAsync(cancellationToken);
+    return Results.Ok(report);
+});
+
 app.MapGet("/api/opportunities", async (
     string? search,
     string? estado,
@@ -227,6 +247,12 @@ app.MapGet("/api/opportunities/{id:long}", async (long id, CrmRepository reposit
 
 app.MapPut("/api/opportunities/{id:long}/assignment", async (long id, OpportunityAssignmentRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
 {
+    var errors = await ValidateAssignmentRequestAsync(request, repository, cancellationToken);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
     var detail = await repository.UpdateAssignmentAsync(id, request, cancellationToken);
     return detail is null ? Results.NotFound() : Results.Ok(detail);
 });
@@ -238,6 +264,12 @@ app.MapPut("/api/opportunities/{id:long}/invitation", async (
     CrmRepository repository,
     CancellationToken cancellationToken) =>
 {
+    var errors = ValidateInvitationUpdateRequest(request);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
     var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
     var detail = await repository.UpdateInvitationAsync(id, request, invitedCompanyName, cancellationToken);
     return detail is null ? Results.NotFound() : Results.Ok(detail);
@@ -284,14 +316,26 @@ app.MapGet("/api/zones", async (CrmRepository repository, CancellationToken canc
 
 app.MapPost("/api/zones", async (ZoneUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
 {
+    var errors = ValidateZoneRequest(request);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
     var zone = await repository.UpsertZoneAsync(null, request, cancellationToken);
-    return Results.Created($"/api/zones/{zone.Id}", zone);
+    return zone is null ? Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "No se pudo guardar la zona.") : Results.Created($"/api/zones/{zone.Id}", zone);
 });
 
 app.MapPut("/api/zones/{id:long}", async (long id, ZoneUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
 {
+    var errors = ValidateZoneRequest(request);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
     var zone = await repository.UpsertZoneAsync(id, request, cancellationToken);
-    return Results.Ok(zone);
+    return zone is null ? Results.NotFound() : Results.Ok(zone);
 });
 
 app.MapGet("/api/users", async (CrmRepository repository, CancellationToken cancellationToken) =>
@@ -302,14 +346,26 @@ app.MapGet("/api/users", async (CrmRepository repository, CancellationToken canc
 
 app.MapPost("/api/users", async (UserUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
 {
+    var errors = await ValidateUserRequestAsync(request, repository, cancellationToken);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
     var user = await repository.UpsertUserAsync(null, request, cancellationToken);
-    return Results.Created($"/api/users/{user.Id}", user);
+    return user is null ? Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "No se pudo guardar el usuario.") : Results.Created($"/api/users/{user.Id}", user);
 });
 
 app.MapPut("/api/users/{id:long}", async (long id, UserUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
 {
+    var errors = await ValidateUserRequestAsync(request, repository, cancellationToken);
+    if (errors.Count > 0)
+    {
+        return Results.ValidationProblem(errors);
+    }
+
     var user = await repository.UpsertUserAsync(id, request, cancellationToken);
-    return Results.Ok(user);
+    return user is null ? Results.NotFound() : Results.Ok(user);
 });
 
 app.MapGet("/api/keywords", async (
@@ -337,7 +393,7 @@ app.MapPost("/api/keywords", async (KeywordRuleUpsertRequest request, CrmReposit
     }
 
     var keyword = await repository.UpsertKeywordRuleAsync(null, request, cancellationToken);
-    return Results.Created($"/api/keywords/{keyword.Id}", keyword);
+    return keyword is null ? Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "No se pudo guardar la palabra clave.") : Results.Created($"/api/keywords/{keyword.Id}", keyword);
 });
 
 app.MapPut("/api/keywords/{id:long}", async (long id, KeywordRuleUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
@@ -349,7 +405,13 @@ app.MapPut("/api/keywords/{id:long}", async (long id, KeywordRuleUpsertRequest r
     }
 
     var keyword = await repository.UpsertKeywordRuleAsync(id, request, cancellationToken);
-    return Results.Ok(keyword);
+    return keyword is null ? Results.NotFound() : Results.Ok(keyword);
+});
+
+app.MapDelete("/api/keywords/{id:long}", async (long id, CrmRepository repository, CancellationToken cancellationToken) =>
+{
+    var deleted = await repository.DeleteKeywordRuleAsync(id, cancellationToken);
+    return deleted ? Results.NoContent() : Results.NotFound();
 });
 
 app.MapGet("/api/workflows", async (CrmRepository repository, CancellationToken cancellationToken) =>
@@ -409,6 +471,146 @@ static Dictionary<string, string[]> ValidateKeywordRuleRequest(KeywordRuleUpsert
     }
 
     return errors;
+}
+
+static Dictionary<string, string[]> ValidateZoneRequest(ZoneUpsertRequest request)
+{
+    var errors = new Dictionary<string, string[]>();
+
+    if (string.IsNullOrWhiteSpace(request.Name))
+    {
+        errors["name"] = ["El nombre de la zona es obligatorio."];
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Code))
+    {
+        errors["code"] = ["El codigo de la zona es obligatorio."];
+    }
+    else
+    {
+        var normalizedCode = request.Code.Trim().ToUpperInvariant();
+        if (normalizedCode.Length is < 2 or > 12)
+        {
+            errors["code"] = ["El codigo debe tener entre 2 y 12 caracteres."];
+        }
+    }
+
+    return errors;
+}
+
+static async Task<Dictionary<string, string[]>> ValidateUserRequestAsync(UserUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken)
+{
+    var errors = new Dictionary<string, string[]>();
+
+    if (string.IsNullOrWhiteSpace(request.FullName))
+    {
+        errors["fullName"] = ["El nombre completo es obligatorio."];
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Email))
+    {
+        errors["email"] = ["El correo es obligatorio."];
+    }
+    else if (!IsValidEmail(request.Email))
+    {
+        errors["email"] = ["El correo no tiene un formato valido."];
+    }
+
+    var normalizedRole = request.Role?.Trim().ToLowerInvariant();
+    if (normalizedRole is not ("manager" or "seller" or "analyst"))
+    {
+        errors["role"] = ["El rol debe ser manager, seller o analyst."];
+    }
+
+    if (request.ZoneId.HasValue && !await repository.ZoneExistsAsync(request.ZoneId.Value, cancellationToken))
+    {
+        errors["zoneId"] = ["La zona seleccionada no existe."];
+    }
+
+    return errors;
+}
+
+static async Task<Dictionary<string, string[]>> ValidateAssignmentRequestAsync(OpportunityAssignmentRequest request, CrmRepository repository, CancellationToken cancellationToken)
+{
+    var errors = new Dictionary<string, string[]>();
+
+    if (!string.IsNullOrWhiteSpace(request.Estado))
+    {
+        var normalizedStatus = request.Estado.Trim().ToLowerInvariant();
+        if (normalizedStatus is not ("nuevo" or "en_revision" or "asignado" or "presentado" or "ganado" or "perdido" or "no_presentado"))
+        {
+            errors["estado"] = ["El estado no es valido."];
+        }
+    }
+
+    if (!string.IsNullOrWhiteSpace(request.Priority))
+    {
+        var normalizedPriority = request.Priority.Trim().ToLowerInvariant();
+        if (normalizedPriority is not ("alta" or "normal" or "baja"))
+        {
+            errors["priority"] = ["La prioridad debe ser alta, normal o baja."];
+        }
+    }
+
+    if (request.AssignedUserId.HasValue && !await repository.UserExistsAsync(request.AssignedUserId.Value, cancellationToken))
+    {
+        errors["assignedUserId"] = ["El vendedor seleccionado no existe."];
+    }
+
+    if (request.ZoneId.HasValue && !await repository.ZoneExistsAsync(request.ZoneId.Value, cancellationToken))
+    {
+        errors["zoneId"] = ["La zona seleccionada no existe."];
+    }
+
+    return errors;
+}
+
+static Dictionary<string, string[]> ValidateInvitationUpdateRequest(OpportunityInvitationUpdateRequest request)
+{
+    var errors = new Dictionary<string, string[]>();
+
+    if (request.IsInvitedMatch && string.IsNullOrWhiteSpace(request.InvitationSource))
+    {
+        errors["invitationSource"] = ["Debes indicar la fuente de la invitacion confirmada."];
+    }
+
+    return errors;
+}
+
+static bool IsValidEmail(string email)
+{
+    try
+    {
+        _ = new MailAddress(email.Trim());
+        return true;
+    }
+    catch
+    {
+        return false;
+    }
+}
+
+static (int StatusCode, string Title, string Detail) MapPostgresException(PostgresException exception)
+{
+    return exception.SqlState switch
+    {
+        PostgresErrorCodes.UniqueViolation => (
+            StatusCodes.Status409Conflict,
+            "Conflicto de datos",
+            "Ya existe un registro con esos valores unicos. Revisa correo, nombre o codigo."),
+        PostgresErrorCodes.CheckViolation or PostgresErrorCodes.NotNullViolation or PostgresErrorCodes.StringDataRightTruncation => (
+            StatusCodes.Status400BadRequest,
+            "Datos invalidos",
+            "La base de datos rechazo la operacion por valores incompletos o fuera de formato."),
+        PostgresErrorCodes.ForeignKeyViolation => (
+            StatusCodes.Status400BadRequest,
+            "Relacion invalida",
+            "La operacion referencia una zona, usuario o proceso que no existe."),
+        _ => (
+            StatusCodes.Status500InternalServerError,
+            "Error interno del CRM",
+            "La solicitud no se pudo completar. Revisa el backend o los datos de PostgreSQL."),
+    };
 }
 
 
