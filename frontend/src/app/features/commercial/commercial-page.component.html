@@ -1,0 +1,573 @@
+<section class="page">
+  <header class="page-head">
+    <div class="page-head-copy">
+      <span class="eyebrow">Comercial</span>
+      <h1>Workspace de procesos SERCOP</h1>
+      <p>Un puesto de mando comercial para priorizar procesos, asignar responsables, confirmar invitaciones HDM y dar seguimiento sin saturar la pantalla.</p>
+    </div>
+    <div class="head-actions">
+      <button type="button" class="ghost" (click)="export('csv')">Exportar CSV</button>
+      <button type="button" class="ghost" (click)="export('excel')">Exportar Excel</button>
+    </div>
+  </header>
+
+  @if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  }
+
+  <section class="highlight-strip">
+    @for (highlight of workspaceHighlights(); track highlight.label) {
+      <article class="highlight-card" [attr.data-tone]="highlight.tone">
+        <span>{{ highlight.label }}</span>
+        <strong>{{ highlight.value }}</strong>
+      </article>
+    }
+  </section>
+
+  @if (sellerBanner()) {
+    <div class="info-banner">{{ sellerBanner() }}</div>
+  }
+
+  @if (alertSummary(); as alerts) {
+    <section class="panel alert-panel">
+      <div class="section-head">
+        <div>
+          <h2>{{ isSeller() ? 'Mis alertas comerciales' : 'Alertas comerciales del equipo' }}</h2>
+          <p>Procesos publicados hoy con oportunidades de acción inmediata.</p>
+        </div>
+        <div class="alert-kpis">
+          <article>
+            <span>Nuevos hoy</span>
+            <strong>{{ newProcessesLane().length }}</strong>
+          </article>
+          <article>
+            <span>Por vencer</span>
+            <strong>{{ staleLane().length }}</strong>
+          </article>
+          <article>
+            <span>Invitados HDM</span>
+            <strong>{{ invitedLane().length }}</strong>
+          </article>
+        </div>
+      </div>
+
+      @if (newProcessesLane().length > 0) {
+        <div class="alert-list">
+          @for (item of newProcessesLane() | slice:0:8; track item.id) {
+            <article class="alert-item new-process" [attr.data-tone]="'new'">
+              <div class="alert-item-top">
+                <span class="process-code" title="Código de proceso">{{ item.processCode }}</span>
+                <span class="status-pill new-badge">NUEVO</span>
+              </div>
+              <strong class="alert-title">{{ item.titulo }}</strong>
+              <div class="alert-details">
+                <span class="alert-detail"><strong>Entidad:</strong> {{ item.entidad || 'No registrada' }}</span>
+                <span class="alert-detail"><strong>Publicado:</strong> {{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
+                <span class="alert-detail"><strong>Vence:</strong> {{ item.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</span>
+              </div>
+              <div class="alert-tags">
+                <span class="tag">{{ humanizeLabel(item.estado) }}</span>
+                <span class="tag" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
+              </div>
+            </article>
+          }
+        </div>
+        @if (newProcessesLane().length > 8) {
+          <div class="alert-footer">+{{ newProcessesLane().length - 8 }} más procesos nuevos</div>
+        }
+      } @else {
+        <div class="info-card">No hay procesos nuevos publicados hoy.</div>
+      }
+    </section>
+  }
+
+  <section class="workspace">
+    <aside class="filters-column">
+      <form class="panel filters" ngNoForm (ngSubmit)="reload()">
+        <div class="section-head">
+          <div>
+            <h2>Filtros operativos</h2>
+            <p>Refina el tablero sin salir del workspace.</p>
+          </div>
+        </div>
+
+        <div class="filter-grid">
+          <label class="full">
+            <span>Buscar proceso</span>
+            <input [ngModel]="filters().search" (ngModelChange)="patchFilters('search', $event)" placeholder="Codigo, titulo o entidad" />
+          </label>
+
+          <label>
+            <span>Estado</span>
+            <select [ngModel]="filters().estado" (ngModelChange)="patchFilters('estado', $event)">
+              <option value="">Todos</option>
+              <option value="nuevo">nuevo</option>
+              <option value="en_revision">en revision</option>
+              <option value="asignado">asignado</option>
+              <option value="presentado">presentado</option>
+              <option value="ganado">ganado</option>
+              <option value="perdido">perdido</option>
+              <option value="no_presentado">no presentado</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Zona</span>
+            <select [ngModel]="filters().zoneId" (ngModelChange)="patchFilters('zoneId', $event)">
+              <option value="">Todas</option>
+              @for (zone of zones(); track zone.id) {
+                <option [value]="zone.id">{{ zone.name }}</option>
+              }
+            </select>
+          </label>
+
+          @if (!isSeller()) {
+            <label>
+              <span>Vendedor</span>
+              <select [ngModel]="filters().assignedUserId" (ngModelChange)="patchFilters('assignedUserId', $event)">
+                <option value="">Todos</option>
+                @for (user of visibleSellerUsers(); track user.id) {
+                  <option [value]="user.id">{{ user.fullName }}</option>
+                }
+              </select>
+            </label>
+          }
+        </div>
+
+        <div class="switches">
+          <label class="switch"><input type="checkbox" [ngModel]="filters().invitedOnly" (ngModelChange)="patchFilters('invitedOnly', $event)" /> Solo invitados HDM</label>
+          <label class="switch"><input type="checkbox" [ngModel]="filters().todayOnly" (ngModelChange)="patchFilters('todayOnly', $event)" /> Solo procesos del dia</label>
+        </div>
+
+        @if (filters().todayOnly) {
+          <div class="info-card">
+            Si un proceso no aparece, puede estar oculto por fecha. Usa el verificador de soporte para distinguir fecha vs. filtro quimico.
+          </div>
+        }
+
+        <button type="submit">Aplicar filtros</button>
+      </form>
+
+      <form class="panel saved-view-panel" ngNoForm (ngSubmit)="saveCurrentView()">
+        <div class="section-head">
+          <div>
+            <h3>Vistas guardadas</h3>
+            <p>Guarda combinaciones de filtros y agrupacion.</p>
+          </div>
+        </div>
+        <div class="saved-view-form">
+          <input [ngModel]="savedViewForm().name" (ngModelChange)="patchSavedViewForm('name', $event)" placeholder="Nombre de vista" />
+          <label class="switch"><input type="checkbox" [ngModel]="savedViewForm().shared" (ngModelChange)="patchSavedViewForm('shared', $event)" /> Compartir</label>
+          <button type="submit" class="ghost">Guardar vista</button>
+        </div>
+        <div class="saved-list">
+          @for (view of savedViews(); track view.id) {
+            <div class="saved-item">
+              <button type="button" class="saved-link" (click)="applySavedView(view)">{{ view.name }}</button>
+              <button type="button" class="remove" (click)="deleteSavedView(view)">x</button>
+            </div>
+          }
+        </div>
+      </form>
+
+      <form class="panel support-check" ngNoForm (ngSubmit)="runVisibilityCheck()">
+        <div class="section-head">
+          <div>
+            <h3>Soporte de visibilidad</h3>
+            <p>Explica por que un codigo entra o sale del tablero.</p>
+          </div>
+        </div>
+        <input [ngModel]="visibilityCode()" (ngModelChange)="visibilityCode.set($event)" placeholder="NIC u OCID" />
+        <button type="submit" class="ghost">Consultar</button>
+        @if (supportVisibility(); as visibility) {
+          <div class="support-result" [class.hidden]="!visibility.visible">
+            <strong>{{ visibility.processCode }}</strong>
+            <span>{{ visibility.visible ? 'Visible con filtro actual' : 'No visible con filtro actual' }}</span>
+            <ul>
+              @for (reason of visibility.reasons; track reason) {
+                <li>{{ reason }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </form>
+    </aside>
+
+    <section class="board-column">
+      <section class="panel board-shell">
+        <div class="board-head">
+          <div>
+            <span class="eyebrow">Tablero activo</span>
+            <h2>{{ boardTitle() }}</h2>
+            <p>{{ boardDescription() }}</p>
+          </div>
+          <div class="board-head-meta">
+            <strong>{{ totalCount() }}</strong>
+            <span>procesos visibles</span>
+          </div>
+        </div>
+
+        <div class="board-toolbar">
+          <div class="grouping">
+            <span>Agrupar por</span>
+            <div class="segmented">
+              <button type="button" [class.active]="grouping() === 'age'" (click)="grouping.set('age')">Antiguedad</button>
+              <button type="button" [class.active]="grouping() === 'status'" (click)="grouping.set('status')">Estado</button>
+            </div>
+          </div>
+
+          <div class="active-filters">
+            @if (activeFilterSummary().length === 0) {
+              <span class="filter-chip empty">Sin filtros extra</span>
+            } @else {
+              @for (token of activeFilterSummary(); track token) {
+                <span class="filter-chip">{{ token }}</span>
+              }
+            }
+          </div>
+        </div>
+
+        @if (loading()) {
+          <div class="board-loading">Cargando procesos...</div>
+        } @else if (grouping() === 'age') {
+          <section class="board age-board">
+            <article class="lane lane-new">
+              <header>
+                <div>
+                  <h3>Nuevos hoy</h3>
+                  <p>Procesos publicados recientemente con máxima prioridad.</p>
+                </div>
+                <span class="lane-count">{{ newProcessesLane().length }}</span>
+              </header>
+                <div class="lane-scroll">
+                @for (item of newProcessesLane(); track item.id) {
+                  <button type="button" class="opportunity-card new-process-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                    <div class="card-top">
+                      <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
+                      <span class="status-pill new-badge">NUEVO</span>
+                    </div>
+                    <span class="card-title">{{ item.titulo }}</span>
+                    <div class="card-meta">
+                      <span>{{ item.entidad || 'Entidad no registrada' }}</span>
+                      <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                    </div>
+                    <div class="card-foot">
+                      <span class="status-pill" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
+                      <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                    </div>
+                  </button>
+                }
+              </div>
+            </article>
+
+            <article class="lane lane-current">
+              <header>
+                <div>
+                  <h3>0-1 día</h3>
+                  <p>Procesos recientes ordenados por antigüedad.</p>
+                </div>
+                <span class="lane-count">{{ currentLane().length }}</span>
+              </header>
+              <div class="lane-scroll">
+                @for (item of currentLane(); track item.id) {
+                  <button type="button" class="opportunity-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                    <div class="card-top">
+                      <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
+                      <span class="status-pill subtle">{{ humanizeLabel(item.estado) }}</span>
+                    </div>
+                    <span class="card-title">{{ item.titulo }}</span>
+                    <div class="card-meta">
+                      <span>{{ item.entidad || 'Entidad no registrada' }}</span>
+                      <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                    </div>
+                    <div class="card-foot">
+                      <span class="status-pill" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
+                      <span class="card-foot-inline">{{ item.daysOpen }} días</span>
+                    </div>
+                  </button>
+                }
+              </div>
+            </article>
+
+            <article class="lane lane-stale">
+              <header>
+                <div>
+                  <h3>Más de 1 día</h3>
+                  <p>Backlog ordenado por tiempo de vencimiento.</p>
+                </div>
+                <span class="lane-count">{{ staleLane().length }}</span>
+              </header>
+              <div class="lane-scroll lane-scroll-stale">
+                @for (item of staleLane(); track item.id) {
+                  <button type="button" class="opportunity-card opportunity-card-stale" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                    <div class="card-top">
+                      <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
+                      <div class="card-top-tags">
+                        <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                        <span class="status-pill subtle">{{ item.daysOpen }} días</span>
+                      </div>
+                    </div>
+                    <div class="card-summary-grid">
+                      <div>
+                        <small>Entidad</small>
+                        <span>{{ item.entidad || 'Entidad no registrada' }}</span>
+                      </div>
+                      <div>
+                        <small>Responsable</small>
+                        <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                      </div>
+                      <div>
+                        <small>Publicado</small>
+                        <span>{{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
+                      </div>
+                      <div>
+                        <small>Límite</small>
+                        <span>{{ item.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</span>
+                      </div>
+                    </div>
+                    <div class="card-foot">
+                      <span class="status-pill" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
+                      <span class="card-foot-inline">{{ humanizeLabel(item.estado) }}</span>
+                    </div>
+                  </button>
+                }
+              </div>
+            </article>
+          </section>
+        } @else {
+          <section class="board status-board">
+            @for (group of statusGroups(); track group.label) {
+              <article class="lane">
+                <header>
+                  <div>
+                    <h3>{{ humanizeLabel(group.label) }}</h3>
+                    <p>Procesos agrupados por etapa comercial.</p>
+                  </div>
+                  <span>{{ group.items.length }}</span>
+                </header>
+                <div class="lane-scroll">
+                  @for (item of group.items; track item.id) {
+                    <button type="button" class="opportunity-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                      <div class="card-top">
+                        <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
+                        <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                      </div>
+                      <span class="card-title">{{ item.titulo }}</span>
+                      <div class="card-meta">
+                        <span>{{ item.entidad || 'Entidad no registrada' }}</span>
+                        <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                      </div>
+                      <div class="card-foot">
+                        <span class="status-pill" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
+                        <span class="card-foot-inline">{{ item.daysOpen }} dias</span>
+                      </div>
+                    </button>
+                  }
+                </div>
+              </article>
+            }
+          </section>
+        }
+      </section>
+
+      <div class="pager">
+        <button type="button" class="ghost" [disabled]="page() <= 1" (click)="changePage(-1)">Anterior</button>
+        <span>Pagina {{ page() }} de {{ totalPages() }} · {{ totalCount() }} procesos</span>
+        <button type="button" class="ghost" [disabled]="page() >= totalPages()" (click)="changePage(1)">Siguiente</button>
+      </div>
+    </section>
+
+    <aside class="detail panel">
+      @if (detailLoading()) {
+        <div class="detail-loading">Cargando detalle...</div>
+      } @else if (selectedOpportunity(); as detail) {
+        <div class="detail-scroll">
+          <header class="detail-head">
+            <div>
+              <span class="detail-code">{{ detail.processCode }}</span>
+              <h2>{{ detail.titulo }}</h2>
+              <p>{{ detail.entidad || 'Entidad no registrada' }}</p>
+            </div>
+            <div class="chip-row">
+              <span class="chip">{{ humanizeLabel(detail.estado) }}</span>
+              <span class="chip" [attr.data-tone]="slaTone(detail.slaStatus)">{{ detail.slaStatus }}</span>
+            </div>
+          </header>
+
+          <div class="detail-actions">
+            <button type="button" class="ghost" (click)="openProcess(detail.url)">Abrir ficha SERCOP</button>
+            @if (detail.assignedUserName) {
+              <span class="quick-context">Responsable: {{ detail.assignedUserName }}</span>
+            } @else {
+              <span class="quick-context muted">Sin responsable asignado</span>
+            }
+          </div>
+
+          <section class="summary-grid">
+            <div><span>Publicacion</span><strong>{{ detail.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</strong></div>
+            <div><span>Limite</span><strong>{{ detail.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</strong></div>
+            <div><span>Dias abierto</span><strong>{{ detail.daysOpen }}</strong></div>
+            <div><span>Monto</span><strong>{{ detail.montoRef ?? 0 | number:'1.0-2' }}</strong></div>
+            <div><span>Zona</span><strong>{{ detail.zoneName || 'Sin zona' }}</strong></div>
+            <div><span>Resultado</span><strong>{{ humanizeLabel(detail.resultado) }}</strong></div>
+          </section>
+
+          <section class="editor-block">
+            <div class="section-head">
+              <div>
+                <h3>Asignacion y estado</h3>
+                <p>Actualiza propietario, zona, etapa y prioridad del proceso.</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>
+                <span>Vendedor</span>
+                @if (canManageAssignments()) {
+                  <select [ngModel]="assignmentForm().assignedUserId" (ngModelChange)="patchAssignmentForm('assignedUserId', $event)">
+                    <option value="">Sin vendedor</option>
+                    @for (user of visibleSellerUsers(); track user.id) {
+                      <option [value]="user.id">{{ user.fullName }}</option>
+                    }
+                  </select>
+                } @else {
+                  <input [ngModel]="selectedOpportunity()?.assignedUserName || currentUser()?.fullName || 'Sin vendedor'" disabled />
+                }
+              </label>
+              <label>
+                <span>Zona</span>
+                @if (canManageAssignments()) {
+                  <select [ngModel]="assignmentForm().zoneId" (ngModelChange)="patchAssignmentForm('zoneId', $event)">
+                    <option value="">Sin zona</option>
+                    @for (zone of zones(); track zone.id) {
+                      <option [value]="zone.id">{{ zone.name }}</option>
+                    }
+                  </select>
+                } @else {
+                  <input [ngModel]="selectedOpportunity()?.zoneName || currentUser()?.zoneName || 'Sin zona'" disabled />
+                }
+              </label>
+              <label>
+                <span>Estado comercial</span>
+                <select [ngModel]="assignmentForm().estado" (ngModelChange)="patchAssignmentForm('estado', $event)">
+                  <option value="nuevo">nuevo</option>
+                  <option value="en_revision">en revision</option>
+                  <option value="asignado">asignado</option>
+                  <option value="presentado">presentado</option>
+                  <option value="ganado">ganado</option>
+                  <option value="perdido">perdido</option>
+                  <option value="no_presentado">no presentado</option>
+                </select>
+              </label>
+              <label>
+                <span>Prioridad</span>
+                <select [ngModel]="assignmentForm().priority" (ngModelChange)="patchAssignmentForm('priority', $event)">
+                  <option value="alta">alta</option>
+                  <option value="normal">normal</option>
+                  <option value="baja">baja</option>
+                </select>
+              </label>
+              <label class="full">
+                <span>Notas operativas</span>
+                <textarea [ngModel]="assignmentForm().notes" (ngModelChange)="patchAssignmentForm('notes', $event)" placeholder="Contexto comercial, propuesta de accion o comentarios internos"></textarea>
+              </label>
+            </div>
+            <button type="button" (click)="saveAssignment()">Guardar asignacion</button>
+          </section>
+
+          <section class="editor-block">
+            <div class="section-head">
+              <div>
+                <h3>Seguimiento y recordatorio</h3>
+                <p>Programa la siguiente accion comercial sobre este proceso.</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>
+                <span>Fecha y hora</span>
+                <input type="datetime-local" [ngModel]="reminderForm().remindAt" (ngModelChange)="patchReminderForm('remindAt', $event)" />
+              </label>
+              <label>
+                <span>Notas del recordatorio</span>
+                <textarea [ngModel]="reminderForm().notes" (ngModelChange)="patchReminderForm('notes', $event)" placeholder="Que debe revisarse o ejecutarse"></textarea>
+              </label>
+            </div>
+            <button type="button" (click)="saveReminder()">Guardar recordatorio</button>
+          </section>
+
+          @if (canConfirmInvitation()) {
+            <section class="editor-block">
+              <div class="section-head">
+                <div>
+                  <h3>Confirmacion HDM</h3>
+                  <p>Registra evidencia y valida invitacion cuando aplique.</p>
+                </div>
+              </div>
+              <label class="switch"><input type="checkbox" [ngModel]="invitationForm().isInvitedMatch" (ngModelChange)="patchInvitationForm('isInvitedMatch', $event)" /> Confirmar invitacion HDM</label>
+              <div class="form-grid">
+                <label>
+                  <span>Fuente</span>
+                  <input [ngModel]="invitationForm().invitationSource" (ngModelChange)="patchInvitationForm('invitationSource', $event)" placeholder="manual_crm, reporte_sercop, etc." />
+                </label>
+                <label>
+                  <span>URL de evidencia</span>
+                  <input [ngModel]="invitationForm().invitationEvidenceUrl" (ngModelChange)="patchInvitationForm('invitationEvidenceUrl', $event)" placeholder="URL de referencia" />
+                </label>
+                <label class="full">
+                  <span>Notas de confirmacion</span>
+                  <textarea [ngModel]="invitationForm().invitationNotes" (ngModelChange)="patchInvitationForm('invitationNotes', $event)" placeholder="Resumen de la evidencia o aclaraciones"></textarea>
+                </label>
+              </div>
+              <button type="button" (click)="saveInvitation()">Guardar invitacion</button>
+            </section>
+          }
+
+          <section class="editor-block">
+            <div class="section-head">
+              <div>
+                <h3>Actividad comercial</h3>
+                <p>Deja trazabilidad del avance y consulta el historial reciente.</p>
+              </div>
+            </div>
+            <label>
+              <span>Nueva nota</span>
+              <textarea [ngModel]="noteForm().body" (ngModelChange)="patchNoteForm('body', $event)" placeholder="Registrar contacto con proveedor, decision o siguiente paso"></textarea>
+            </label>
+            <button type="button" (click)="saveNote()">Guardar nota</button>
+            <div class="activity-list">
+              @for (activity of activities(); track activity.id) {
+                <article class="activity-item">
+                  <div class="activity-top">
+                    <strong>{{ humanizeLabel(activity.activityType) }}</strong>
+                    <small>{{ activity.createdAt | date:'dd/MM/yyyy HH:mm' }}</small>
+                  </div>
+                  <span>{{ activity.body || 'Sin detalle' }}</span>
+                  <small>{{ activity.createdByUserName || 'Sistema' }}</small>
+                </article>
+              }
+            </div>
+          </section>
+
+          <section class="editor-block">
+            <div class="section-head">
+              <div>
+                <h3>Historial de cambios</h3>
+                <p>Bitacora de asignacion y movimientos del proceso.</p>
+              </div>
+            </div>
+            <div class="history-list">
+              @for (entry of detail.assignmentHistory; track entry.id) {
+                <article class="history-item">
+                  <strong>{{ entry.assignedUserName || 'Sin vendedor' }} · {{ entry.zoneName || 'Sin zona' }}</strong>
+                  <span>{{ humanizeLabel(entry.previousStatus) }} → {{ humanizeLabel(entry.newStatus) }}</span>
+                  <small>{{ entry.changedAt | date:'dd/MM/yyyy HH:mm' }}</small>
+                </article>
+              }
+            </div>
+          </section>
+        </div>
+      } @else {
+        <div class="detail-empty">Selecciona un proceso para revisar detalle, actividad y recordatorios.</div>
+      }
+    </aside>
+  </section>
+</section>
