@@ -1,0 +1,79 @@
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand-block">
+      <div class="brand">
+        <div class="brand-mark">HDM</div>
+        <div>
+          <strong>CRM SERCOP</strong>
+          <p>Operacion, gerencia y automatizacion</p>
+        </div>
+      </div>
+      <p class="brand-note">Una consola unica para priorizar procesos, asignar responsables y controlar resultados sin mezclar operacion con seguimiento comercial.</p>
+    </div>
+
+    <section class="nav-group">
+      <span class="sidebar-label">Trabajo diario</span>
+      <nav class="nav">
+        <a routerLink="/commercial" routerLinkActive="active">
+          <span>Comercial</span>
+          <small>Workspace principal</small>
+        </a>
+        <a routerLink="/dashboard" routerLinkActive="active">
+          <span>Dashboard</span>
+          <small>Resumen diario</small>
+        </a>
+      </nav>
+    </section>
+
+    <section class="nav-group">
+      <span class="sidebar-label">Control y soporte</span>
+      <nav class="nav">
+        @if (showManagement()) {
+          <a routerLink="/management" routerLinkActive="active">
+            <span>Gerencia</span>
+            <small>KPI, alertas y tendencias</small>
+          </a>
+        }
+        @if (showOperations()) {
+          <a routerLink="/operations/users-zones" routerLinkActive="active">
+            <span>Operacion</span>
+            <small>Usuarios, zonas y reglas</small>
+          </a>
+        }
+        @if (showAutomation()) {
+          <a routerLink="/automation" routerLinkActive="active">
+            <span>Automatizacion</span>
+            <small>Workflows n8n</small>
+          </a>
+        }
+      </nav>
+    </section>
+
+    <section class="sidebar-card">
+      <span class="eyebrow">Sesion activa</span>
+      @if (user(); as currentUser) {
+        <strong>{{ currentUser.fullName }}</strong>
+        <p>{{ currentUser.role }} · {{ currentUser.email }}</p>
+        <div class="chip-row">
+          <span class="chip role-chip">{{ currentUser.role }}</span>
+          @if (currentUser.zoneName) {
+            <span class="chip">{{ currentUser.zoneName }}</span>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="sidebar-card sidebar-note">
+      <span class="eyebrow">Ruta sugerida</span>
+      <p>Empieza en Comercial para asignar y seguir procesos. Usa Gerencia para lectura ejecutiva y Operacion para mantener reglas y usuarios.</p>
+    </section>
+
+    <button type="button" class="logout" (click)="logout()">Cerrar sesion</button>
+  </aside>
+
+  <main class="content">
+    <div class="content-inner">
+      <router-outlet />
+    </div>
+  </main>
+</div>

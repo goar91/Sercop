@@ -30,6 +30,22 @@ internal static class ChemistryOpportunityPolicy
         CreateRegex(@"colorantes?"),
     };
 
+    private static readonly Regex[] LaboratoryEquipmentSignals =
+    {
+        CreateRegex(@"campanas? de extracci[oó]n"),
+        CreateRegex(@"campana extractora"),
+        CreateRegex(@"cabinas? de flujo laminar"),
+        CreateRegex(@"\bmuflas?\b"),
+        CreateRegex(@"\bestufas?\b"),
+        CreateRegex(@"hornos? de laboratorio"),
+        CreateRegex(@"equipos? de laboratorio"),
+        CreateRegex(@"digestor"),
+        CreateRegex(@"extractor"),
+        CreateRegex(@"ducha de seguridad"),
+        CreateRegex(@"lavaojos"),
+        CreateRegex(@"cabinas?"),
+    };
+
     private static readonly Regex[] ChemistryContextSignals =
     {
         CreateRegex(@"laborator"),
@@ -46,9 +62,12 @@ internal static class ChemistryOpportunityPolicy
         CreateRegex(@"tejidos? vegetales?"),
         CreateRegex(@"suelos?"),
         CreateRegex(@"contaminantes?"),
+        CreateRegex(@"ambiental"),
+        CreateRegex(@"ingenier[ií]a ambiental"),
+        CreateRegex(@"anal[ií]tica"),
+        CreateRegex(@"fisicoqu[ií]mic"),
+        CreateRegex(@"qu[ií]mica"),
     };
-
-    private static readonly Regex ChemistryTermSignal = CreateRegex(@"qu[ií]mic");
 
     private static readonly Regex[] StrictExcludeSignals =
     {
@@ -82,10 +101,6 @@ internal static class ChemistryOpportunityPolicy
         CreateRegex(@"desaduaniz"),
         CreateRegex(@"instrumentos? de medici[oó]n"),
         CreateRegex(@"aire acondicionado"),
-        CreateRegex(@"vitrina"),
-        CreateRegex(@"incubadora"),
-        CreateRegex(@"centrifug"),
-        CreateRegex(@"balanzas?"),
         CreateRegex(@"electrodom[eé]stic"),
         CreateRegex(@"accesorios? electr[oó]nic"),
         CreateRegex(@"invernadero"),
@@ -95,16 +110,7 @@ internal static class ChemistryOpportunityPolicy
         CreateRegex(@"agitaci[oó]n"),
         CreateRegex(@"herramient"),
         CreateRegex(@"ferreter"),
-        CreateRegex(@"campanas? de extracci[oó]n"),
-        CreateRegex(@"adquisi(?:ci[oó]n)? de equipos?"),
-        CreateRegex(@"adquirir equipos?"),
-        CreateRegex(@"equipos?\s+para"),
-        CreateRegex(@"\bmuflas?\b"),
-        CreateRegex(@"\bestufas?\b"),
-        CreateRegex(@"celdas? electroqu[ií]mic"),
-        CreateRegex(@"analizador"),
         CreateRegex(@"insumos generales"),
-        CreateRegex(@"equipos? de laboratorio"),
     };
 
     private static readonly Regex[] MedicalExcludeSignals =
@@ -134,8 +140,6 @@ internal static class ChemistryOpportunityPolicy
         CreateRegex(@"farmacotecnia"),
         CreateRegex(@"hospital del d[ií]a"),
         CreateRegex(@"hospitalari"),
-        CreateRegex(@"apoyo tecnol[oó]gico"),
-        CreateRegex(@"convenio de uso"),
         CreateRegex(@"pruebas? r[aá]pidas?"),
     };
 
@@ -163,40 +167,53 @@ internal static class ChemistryOpportunityPolicy
     public static bool IsChemicalKeywordFamily(string? family)
         => !NonChemicalKeywordFamilies.Contains((family ?? string.Empty).Trim());
 
-    public static bool ShouldDisplay(string title, string? entity, string? processType, KeywordRuleSnapshot keywordRules)
+    public static ChemistryPolicyEvaluation Evaluate(string title, string? entity, string? processType, KeywordRuleSnapshot keywordRules)
     {
         var haystack = $"{title} {entity ?? string.Empty} {processType ?? string.Empty}";
         var normalizedHaystack = haystack.ToLowerInvariant();
+        var reasons = new List<string>();
 
-        if (keywordRules.ExcludeKeywords.Any(keyword => normalizedHaystack.Contains(keyword, StringComparison.Ordinal)))
+        var matchingExcludeKeyword = keywordRules.ExcludeKeywords.FirstOrDefault(keyword => normalizedHaystack.Contains(keyword, StringComparison.Ordinal));
+        if (!string.IsNullOrWhiteSpace(matchingExcludeKeyword))
         {
-            return false;
+            reasons.Add($"Coincide con palabra excluida: {matchingExcludeKeyword}.");
         }
 
         var hasKeywordInclude = keywordRules.IncludeKeywords.Any(keyword => normalizedHaystack.Contains(keyword, StringComparison.Ordinal));
+        var hasSupplySignals = MatchesAny(haystack, SupplySignals);
+        var hasLaboratoryEquipmentSignals = MatchesAny(haystack, LaboratoryEquipmentSignals);
+        var hasChemistryContext = MatchesAny(haystack, ChemistryContextSignals);
 
-        if (!MatchesAny(haystack, SupplySignals) && !hasKeywordInclude)
+        if (!hasSupplySignals && !(hasLaboratoryEquipmentSignals && hasChemistryContext) && !hasKeywordInclude)
         {
-            return false;
+            reasons.Add("No contiene insumos, reactivos o equipos de laboratorio quimico relevantes.");
         }
 
-        if (!MatchesAny(haystack, ChemistryContextSignals) && !ChemistryTermSignal.IsMatch(haystack) && !hasKeywordInclude)
+        if (!hasChemistryContext && !hasKeywordInclude)
         {
-            return false;
+            reasons.Add("No tiene contexto quimico, ambiental, analitico o de laboratorio docente.");
         }
 
         if (MatchesAny(haystack, MedicalExcludeSignals))
         {
-            return false;
+            reasons.Add("Se excluye por contexto medico, clinico u hospitalario.");
         }
 
         if (MatchesAny(haystack, StrictExcludeSignals))
         {
-            return false;
+            reasons.Add("Se excluye por pertenecer a una categoria no quimica o de servicio.");
         }
 
-        return !MatchesAny(haystack, PharmaSignals);
+        if (MatchesAny(haystack, PharmaSignals))
+        {
+            reasons.Add("Se excluye por ser farmaceutico o formulacion clinica.");
+        }
+
+        return new ChemistryPolicyEvaluation(reasons.Count == 0, reasons);
     }
+
+    public static bool ShouldDisplay(string title, string? entity, string? processType, KeywordRuleSnapshot keywordRules)
+        => Evaluate(title, entity, processType, keywordRules).IsVisible;
 
     public static IReadOnlyList<string> ResolveWinningAreas(IEnumerable<string> keywords, IReadOnlyDictionary<string, string> familyByKeyword)
         => keywords
@@ -212,6 +229,10 @@ internal static class ChemistryOpportunityPolicy
     private static bool MatchesAny(string value, IEnumerable<Regex> patterns)
         => patterns.Any(pattern => pattern.IsMatch(value));
 }
+
+internal sealed record ChemistryPolicyEvaluation(
+    bool IsVisible,
+    IReadOnlyList<string> Reasons);
 
 internal sealed record KeywordRuleSnapshot(
     IReadOnlyList<string> IncludeKeywords,

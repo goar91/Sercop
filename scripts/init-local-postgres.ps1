@@ -36,40 +36,57 @@ if (-not $appDb -or -not $appUser -or -not $appPassword) {
 
 function Invoke-Psql([string]$Database, [string]$Sql) {
     & $psql -h $DbHost -p $Port -U $AdminUser -d $Database -v ON_ERROR_STOP=1 -c $Sql
+    if ($LASTEXITCODE -ne 0) {
+        throw "psql devolvio codigo $LASTEXITCODE ejecutando SQL sobre $Database."
+    }
+}
+
+function Invoke-PsqlFile([string]$Database, [string]$Path) {
+    & $psql -h $DbHost -p $Port -U $AdminUser -d $Database -v ON_ERROR_STOP=1 -f $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "psql devolvio codigo $LASTEXITCODE ejecutando el script $Path sobre $Database."
+    }
 }
 
 $env:PGPASSWORD = $AdminPassword
 try {
     $roleExists = & $psql -h $DbHost -p $Port -U $AdminUser -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$appUser';"
+    if ($LASTEXITCODE -ne 0) {
+        throw 'No se pudo consultar la existencia del rol de aplicacion.'
+    }
     if (-not ($roleExists -match '1')) {
         Invoke-Psql 'postgres' "CREATE ROLE $appUser WITH LOGIN PASSWORD '$appPassword';"
     }
 
     $dbExists = & $psql -h $DbHost -p $Port -U $AdminUser -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$appDb';"
+    if ($LASTEXITCODE -ne 0) {
+        throw 'No se pudo consultar la existencia de la base local.'
+    }
     if (-not ($dbExists -match '1')) {
         Invoke-Psql 'postgres' "CREATE DATABASE $appDb OWNER $appUser;"
     }
 
     Invoke-Psql 'postgres' "GRANT ALL PRIVILEGES ON DATABASE $appDb TO $appUser;"
 
-    foreach ($scriptName in @('001_schema.sql', '002_invitation_filter.sql', '004_url_fix.sql', '003_crm.sql', '005_permissions.sql', '006_performance_indexes.sql', '007_keyword_rules_management.sql', '008_invitation_tracking.sql', '009_supply_filter_rules.sql', '010_exclude_medical_rules.sql', '011_data_integrity.sql')) {
+    foreach ($scriptName in @('001_schema.sql', '002_invitation_filter.sql', '004_url_fix.sql', '003_crm.sql', '005_permissions.sql', '006_performance_indexes.sql', '007_keyword_rules_management.sql', '008_invitation_tracking.sql', '009_supply_filter_rules.sql', '010_exclude_medical_rules.sql', '011_data_integrity.sql', '012_modernization_foundation.sql')) {
         $scriptPath = Join-Path $root "database\init\$scriptName"
         if (-not (Test-Path $scriptPath)) {
             throw "No se encontro el script $scriptPath"
         }
-        & $psql -h $DbHost -p $Port -U $AdminUser -d $appDb -v ON_ERROR_STOP=1 -f $scriptPath
+        Invoke-PsqlFile $appDb $scriptPath
     }
 
     if ($config.ContainsKey('RESPONSIBLE_EMAIL') -and -not [string]::IsNullOrWhiteSpace($config['RESPONSIBLE_EMAIL'])) {
         $responsibleEmail = $config['RESPONSIBLE_EMAIL'].Trim().ToLower()
         $escapedEmail = $responsibleEmail.Replace("'", "''")
         $managerSql = @"
-INSERT INTO crm_users (full_name, email, role, active)
-VALUES ('Responsable Comercial', '$escapedEmail', 'manager', TRUE)
+INSERT INTO crm_users (full_name, email, role, active, login_name)
+VALUES ('Responsable Comercial', '$escapedEmail', 'gerencia', TRUE, split_part('$escapedEmail', '@', 1))
 ON CONFLICT (email) DO UPDATE
 SET full_name = EXCLUDED.full_name,
     role = EXCLUDED.role,
     active = EXCLUDED.active,
+    login_name = COALESCE(crm_users.login_name, split_part(EXCLUDED.email, '@', 1)),
     updated_at = NOW();
 
 DELETE FROM crm_users

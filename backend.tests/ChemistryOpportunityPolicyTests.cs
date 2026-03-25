@@ -27,6 +27,18 @@ public class ChemistryOpportunityPolicyTests
     }
 
     [Fact]
+    public void ShouldDisplay_AceptaEquipamientoDeLaboratorioNoMedicoConContextoQuimico()
+    {
+        var result = ChemistryOpportunityPolicy.ShouldDisplay(
+            "Adquirir campana de extraccion de gases con conducto para el Laboratorio Docente de Ingenieria Ambiental",
+            "Universidad publica",
+            "Necesidad de contratacion",
+            CreateSnapshot());
+
+        Assert.True(result);
+    }
+
+    [Fact]
     public void ShouldDisplay_RespetaExcludeKeywordsAdministrables()
     {
         var result = ChemistryOpportunityPolicy.ShouldDisplay(

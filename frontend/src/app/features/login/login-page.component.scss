@@ -1,0 +1,94 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.login-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 1.5rem;
+}
+
+.login-card {
+  width: min(100%, 480px);
+  padding: 2rem;
+  border-radius: 1.5rem;
+  background: rgba(255, 252, 246, 0.94);
+  border: 1px solid rgba(8, 49, 66, 0.08);
+  box-shadow: 0 24px 60px rgba(8, 49, 66, 0.12);
+}
+
+.heading h1 {
+  margin: 0.35rem 0 0.5rem;
+  color: #173644;
+  font-size: clamp(1.8rem, 4vw, 2.4rem);
+  line-height: 1.05;
+}
+
+.heading p {
+  margin: 0;
+  color: #5f6e73;
+}
+
+.eyebrow {
+  color: #0b6a5f;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.login-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+label span {
+  color: #173644;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+input {
+  min-height: 48px;
+  border: 1px solid rgba(18, 63, 95, 0.16);
+  border-radius: 0.95rem;
+  padding: 0.85rem 1rem;
+  background: white;
+  font: inherit;
+}
+
+.checkbox {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.checkbox input {
+  min-height: auto;
+}
+
+.error {
+  border-radius: 0.9rem;
+  background: rgba(170, 44, 44, 0.08);
+  padding: 0.85rem 1rem;
+  color: #9c3030;
+  font-weight: 600;
+}
+
+button {
+  min-height: 52px;
+  border: 0;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #0b6a5f, #123f5f);
+  color: white;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}

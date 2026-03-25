@@ -1,28 +1,40 @@
 using System.Text.Json.Serialization;
 using backend;
+using backend.Auth;
+using backend.Endpoints;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.FileProviders;
-using System.Net.Mail;
 using Npgsql;
+using Serilog;
+using Serilog.Events;
+using System.Net;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration.AddEnvironmentVariables();
-builder.Logging.ClearProviders();
-builder.Logging.AddSimpleConsole(options =>
+
+builder.Host.UseSerilog((context, services, loggerConfiguration) =>
 {
-    options.SingleLine = true;
-    options.TimestampFormat = "HH:mm:ss ";
+    loggerConfiguration
+        .MinimumLevel.Information()
+        .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+        .Enrich.FromLogContext()
+        .WriteTo.Console()
+        .WriteTo.File(
+            Path.Combine(AppContext.BaseDirectory, "logs", "crm-.log"),
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 14,
+            shared: true);
 });
 
 builder.Services.AddProblemDetails();
-builder.Services.AddResponseCompression(options =>
-{
-    options.EnableForHttps = true;
-});
-
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
@@ -37,8 +49,74 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.WithOrigins(allowedOrigins)
             .AllowAnyHeader()
-            .AllowAnyMethod());
+            .AllowAnyMethod()
+            .AllowCredentials());
 });
+
+builder.Services.AddAuthentication(CrmCookieDefaults.Scheme)
+    .AddCookie(CrmCookieDefaults.Scheme, options =>
+    {
+        options.Cookie.Name = "hdm.crm.session";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = TimeSpan.FromHours(10);
+        options.LoginPath = "/login";
+        options.Events = new CookieAuthenticationEvents
+        {
+            OnRedirectToLogin = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/swagger"))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            },
+            OnRedirectToAccessDenied = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/swagger"))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            }
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(CrmPolicies.Authenticated, policy => policy.RequireAuthenticatedUser());
+    options.AddPolicy(CrmPolicies.Commercial, policy => policy.RequireRole("admin", "gerencia", "coordinator", "seller", "analyst"));
+    options.AddPolicy(CrmPolicies.CommercialManagers, policy => policy.RequireRole("admin", "gerencia", "coordinator"));
+    options.AddPolicy(CrmPolicies.Management, policy => policy.RequireRole("admin", "gerencia"));
+    options.AddPolicy(CrmPolicies.Operations, policy => policy.RequireRole("admin"));
+    options.AddPolicy(CrmPolicies.Automation, policy => policy.RequireRole("admin", "analyst"));
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 50,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+});
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton(_ =>
 {
@@ -63,16 +141,17 @@ builder.Services.AddScoped<CrmRepository>();
 builder.Services.AddHttpClient<SercopPublicClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(45);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("HDM-SERCOP-CRM/1.0");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("HDM-SERCOP-CRM/2.0");
 });
 builder.Services.AddHttpClient<SercopInvitationPublicClient>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(45);
-    client.DefaultRequestHeaders.UserAgent.ParseAdd("HDM-SERCOP-CRM/1.0");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("HDM-SERCOP-CRM/2.0");
 });
 builder.Services.AddHostedService<PublicInvitationSyncService>();
 
 var app = builder.Build();
+
 var frontendCandidates = new[]
 {
     Path.Combine(app.Environment.ContentRootPath, "..", "frontend", "dist", "frontend", "browser"),
@@ -82,31 +161,33 @@ var frontendCandidates = new[]
 var frontendDist = frontendCandidates.FirstOrDefault(Directory.Exists) ?? frontendCandidates[0];
 var hasFrontend = Directory.Exists(frontendDist);
 
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
+
 app.UseExceptionHandler(exceptionApp =>
 {
     exceptionApp.Run(async context =>
     {
-        var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
-        var logger = loggerFactory.CreateLogger("GlobalException");
+        var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("GlobalException");
         var feature = context.Features.Get<IExceptionHandlerFeature>();
         logger.LogError(feature?.Error, "Unhandled exception for {Path}", context.Request.Path);
 
         if (feature?.Error is PostgresException postgresException)
         {
-            var (statusCode, title, detail) = MapPostgresException(postgresException);
+            var (statusCode, title, detail) = EndpointValidation.MapPostgresException(postgresException);
             context.Response.StatusCode = statusCode;
             context.Response.ContentType = "application/problem+json";
-
-            await Results.Problem(
-                title: title,
-                detail: detail,
-                statusCode: statusCode).ExecuteAsync(context);
+            await Results.Problem(title: title, detail: detail, statusCode: statusCode).ExecuteAsync(context);
             return;
         }
 
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/problem+json";
-
         await Results.Problem(
             title: "Error interno del CRM",
             detail: "La solicitud no se pudo completar. Revisa el backend o los datos de PostgreSQL.",
@@ -114,61 +195,42 @@ app.UseExceptionHandler(exceptionApp =>
     });
 });
 
+app.UseSerilogRequestLogging();
 app.UseResponseCompression();
 app.UseCors();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
-var crmAuthActive = string.Equals(app.Configuration["CRM_BASIC_AUTH_ACTIVE"], "true", StringComparison.OrdinalIgnoreCase);
-var crmAuthUser = app.Configuration["CRM_BASIC_AUTH_USER"] ?? "admin";
-var crmAuthPassword = app.Configuration["CRM_BASIC_AUTH_PASSWORD"] ?? string.Empty;
-
+var requireHttps = !string.Equals(app.Configuration["CRM_REQUIRE_HTTPS"], "false", StringComparison.OrdinalIgnoreCase);
 app.Use(async (context, next) =>
 {
-    if (!crmAuthActive || context.Request.Path.StartsWithSegments("/api/health"))
+    if (requireHttps && !context.Request.IsHttps && !IsLocalRequest(context))
     {
-        await next();
-        return;
-    }
-
-    if (!context.Request.Headers.TryGetValue("Authorization", out var authorizationHeader))
-    {
-        context.Response.Headers.WWWAuthenticate = "Basic realm=\"CRM\"";
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return;
-    }
-
-    var headerValue = authorizationHeader.ToString();
-    if (!headerValue.StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))
-    {
-        context.Response.Headers.WWWAuthenticate = "Basic realm=\"CRM\"";
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return;
-    }
-
-    try
-    {
-        var encoded = headerValue[6..].Trim();
-        var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
-        var separatorIndex = decoded.IndexOf(':');
-        var user = separatorIndex >= 0 ? decoded[..separatorIndex] : decoded;
-        var password = separatorIndex >= 0 ? decoded[(separatorIndex + 1)..] : string.Empty;
-
-        if (!string.Equals(user, crmAuthUser, StringComparison.Ordinal) || !string.Equals(password, crmAuthPassword, StringComparison.Ordinal))
-        {
-            context.Response.Headers.WWWAuthenticate = "Basic realm=\"CRM\"";
-            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return;
-        }
-    }
-    catch
-    {
-        context.Response.Headers.WWWAuthenticate = "Basic realm=\"CRM\"";
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        var httpsUrl = $"https://{context.Request.Host}{context.Request.PathBase}{context.Request.Path}{context.Request.QueryString}";
+        context.Response.Redirect(httpsUrl, permanent: false);
         return;
     }
 
     await next();
 });
 
+app.UseWhen(context => context.Request.Path.StartsWithSegments("/swagger"), branch =>
+{
+    branch.Use(async (context, next) =>
+    {
+        if (context.User.Identity?.IsAuthenticated != true)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        await next();
+    });
+});
+
+app.UseSwagger();
+app.UseSwaggerUI();
 
 if (hasFrontend)
 {
@@ -182,435 +244,43 @@ if (hasFrontend)
     {
         FileProvider = fileProvider,
         RequestPath = string.Empty,
-        OnPrepareResponse = context =>
-        {
-            context.Context.Response.Headers.CacheControl = "public,max-age=3600";
-        }
+        OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "public,max-age=3600"
     });
 }
 
-app.MapGet("/api/health", () => Results.Ok(new
+using (var scope = app.Services.CreateScope())
 {
-    status = "ok",
-    service = "sercop-crm-api",
-    timestamp = EcuadorTime.Now(),
-    frontend = hasFrontend ? "served" : "missing-build"
-}));
+    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var repository = scope.ServiceProvider.GetRequiredService<CrmRepository>();
+    var bootstrapPassword = configuration["CRM_AUTH_BOOTSTRAP_PASSWORD"]
+        ?? configuration["CRM_BASIC_AUTH_PASSWORD"]
+        ?? "ChangeMe123!";
 
-app.MapGet("/api/meta", (HttpContext context, IConfiguration configuration) =>
-{
-    var configuredN8nUrl = configuration["N8N_EDITOR_BASE_URL"];
-    var n8nEditorUrl = !string.IsNullOrWhiteSpace(configuredN8nUrl) && !configuredN8nUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase)
-        ? configuredN8nUrl
-        : $"{context.Request.Scheme}://{context.Request.Host.Host}:5678/";
+    await repository.EnsureBootstrapAdminAsync(
+        configuration["CRM_ADMIN_LOGIN"] ?? "admin",
+        configuration["CRM_ADMIN_NAME"] ?? "Administrador CRM",
+        configuration["CRM_ADMIN_EMAIL"] ?? "admin@hdm.local",
+        bootstrapPassword,
+        CancellationToken.None);
+}
 
-    return Results.Ok(new MetaDto(
-        n8nEditorUrl,
-        "PostgreSQL local + CRM",
-        configuration["POSTGRES_DB"] ?? configuration["Database:Name"] ?? "sercop_crm",
-        configuration["RESPONSIBLE_EMAIL"] ?? configuration["Notifications:ResponsibleEmail"],
-        configuration["INVITED_COMPANY_NAME"] ?? "HDM"
-    ));
-});
-
-app.MapGet("/api/dashboard", async (CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var summary = await repository.GetDashboardAsync(cancellationToken);
-    return Results.Ok(summary);
-});
-
-app.MapGet("/api/management/report", async (CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var report = await repository.GetManagementReportAsync(cancellationToken);
-    return Results.Ok(report);
-});
-
-app.MapGet("/api/opportunities", async (
-    string? search,
-    string? estado,
-    long? zoneId,
-    long? assignedUserId,
-    bool? invitedOnly,
-    bool? todayOnly,
-    CrmRepository repository,
-    CancellationToken cancellationToken) =>
-{
-    var items = await repository.GetOpportunitiesAsync(search, estado, zoneId, assignedUserId, invitedOnly ?? false, todayOnly ?? true, cancellationToken);
-    return Results.Ok(items);
-});
-
-app.MapGet("/api/opportunities/{id:long}", async (long id, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var detail = await repository.GetOpportunityAsync(id, cancellationToken);
-    return detail is null ? Results.NotFound() : Results.Ok(detail);
-});
-
-app.MapPut("/api/opportunities/{id:long}/assignment", async (long id, OpportunityAssignmentRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var errors = await ValidateAssignmentRequestAsync(request, repository, cancellationToken);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var detail = await repository.UpdateAssignmentAsync(id, request, cancellationToken);
-    return detail is null ? Results.NotFound() : Results.Ok(detail);
-});
-
-app.MapPut("/api/opportunities/{id:long}/invitation", async (
-    long id,
-    OpportunityInvitationUpdateRequest request,
-    IConfiguration configuration,
-    CrmRepository repository,
-    CancellationToken cancellationToken) =>
-{
-    var errors = ValidateInvitationUpdateRequest(request);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
-    var detail = await repository.UpdateInvitationAsync(id, request, invitedCompanyName, cancellationToken);
-    return detail is null ? Results.NotFound() : Results.Ok(detail);
-});
-
-app.MapPost("/api/invitations/import", async (
-    BulkInvitationImportRequest request,
-    IConfiguration configuration,
-    CrmRepository repository,
-    SercopPublicClient sercopPublicClient,
-    CancellationToken cancellationToken) =>
-{
-    if (string.IsNullOrWhiteSpace(request.CodesText))
-    {
-        return Results.ValidationProblem(new Dictionary<string, string[]>
-        {
-            ["codesText"] = ["Debes ingresar al menos un codigo de proceso."]
-        });
-    }
-
-    var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
-    var fallbackYear = int.TryParse(configuration["OCDS_YEAR"], out var configuredYear) ? configuredYear : DateTime.UtcNow.Year;
-    var result = await repository.BulkImportInvitationsAsync(request, sercopPublicClient, invitedCompanyName, fallbackYear, cancellationToken);
-    return Results.Ok(result);
-});
-
-app.MapPost("/api/invitations/sync", async (
-    IConfiguration configuration,
-    CrmRepository repository,
-    SercopInvitationPublicClient invitationClient,
-    CancellationToken cancellationToken) =>
-{
-    var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
-    var invitedCompanyRuc = configuration["INVITED_COMPANY_RUC"];
-    var result = await repository.SyncInvitationsFromPublicReportsAsync(invitationClient, invitedCompanyName, invitedCompanyRuc, cancellationToken);
-    return Results.Ok(result);
-});
-
-app.MapGet("/api/zones", async (CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var zones = await repository.GetZonesAsync(cancellationToken);
-    return Results.Ok(zones);
-});
-
-app.MapPost("/api/zones", async (ZoneUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var errors = ValidateZoneRequest(request);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var zone = await repository.UpsertZoneAsync(null, request, cancellationToken);
-    return zone is null ? Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "No se pudo guardar la zona.") : Results.Created($"/api/zones/{zone.Id}", zone);
-});
-
-app.MapPut("/api/zones/{id:long}", async (long id, ZoneUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var errors = ValidateZoneRequest(request);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var zone = await repository.UpsertZoneAsync(id, request, cancellationToken);
-    return zone is null ? Results.NotFound() : Results.Ok(zone);
-});
-
-app.MapGet("/api/users", async (CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var users = await repository.GetUsersAsync(cancellationToken);
-    return Results.Ok(users);
-});
-
-app.MapPost("/api/users", async (UserUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var errors = await ValidateUserRequestAsync(request, repository, cancellationToken);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var user = await repository.UpsertUserAsync(null, request, cancellationToken);
-    return user is null ? Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "No se pudo guardar el usuario.") : Results.Created($"/api/users/{user.Id}", user);
-});
-
-app.MapPut("/api/users/{id:long}", async (long id, UserUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var errors = await ValidateUserRequestAsync(request, repository, cancellationToken);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var user = await repository.UpsertUserAsync(id, request, cancellationToken);
-    return user is null ? Results.NotFound() : Results.Ok(user);
-});
-
-app.MapGet("/api/keywords", async (
-    string? ruleType,
-    string? scope,
-    CrmRepository repository,
-    CancellationToken cancellationToken) =>
-{
-    var errors = ValidateKeywordRuleFilters(ruleType, scope);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var keywords = await repository.GetKeywordRulesAsync(ruleType, scope, cancellationToken);
-    return Results.Ok(keywords);
-});
-
-app.MapPost("/api/keywords", async (KeywordRuleUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var errors = ValidateKeywordRuleRequest(request);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var keyword = await repository.UpsertKeywordRuleAsync(null, request, cancellationToken);
-    return keyword is null ? Results.Problem(statusCode: StatusCodes.Status500InternalServerError, title: "No se pudo guardar la palabra clave.") : Results.Created($"/api/keywords/{keyword.Id}", keyword);
-});
-
-app.MapPut("/api/keywords/{id:long}", async (long id, KeywordRuleUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var errors = ValidateKeywordRuleRequest(request);
-    if (errors.Count > 0)
-    {
-        return Results.ValidationProblem(errors);
-    }
-
-    var keyword = await repository.UpsertKeywordRuleAsync(id, request, cancellationToken);
-    return keyword is null ? Results.NotFound() : Results.Ok(keyword);
-});
-
-app.MapDelete("/api/keywords/{id:long}", async (long id, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var deleted = await repository.DeleteKeywordRuleAsync(id, cancellationToken);
-    return deleted ? Results.NoContent() : Results.NotFound();
-});
-
-app.MapGet("/api/workflows", async (CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var workflows = await repository.GetWorkflowsAsync(cancellationToken);
-    return Results.Ok(workflows);
-});
-
-app.MapGet("/api/workflows/{id}", async (string id, CrmRepository repository, CancellationToken cancellationToken) =>
-{
-    var workflow = await repository.GetWorkflowAsync(id, cancellationToken);
-    return workflow is null ? Results.NotFound() : Results.Ok(workflow);
-});
-
-app.MapFallback(async context =>
-{
-    if (!hasFrontend)
-    {
-        context.Response.Redirect("/api/health");
-        return;
-    }
-
-    await context.Response.SendFileAsync(Path.Combine(frontendDist, "index.html"));
-});
+app.MapAuthEndpoints();
+app.MapCoreEndpoints(hasFrontend, frontendDist);
+app.MapManagementEndpoints();
+app.MapOpportunityEndpoints();
+app.MapOperationsEndpoints();
+app.MapAutomationEndpoints();
 
 app.Run();
 
-static Dictionary<string, string[]> ValidateKeywordRuleFilters(string? ruleType, string? scope)
+static bool IsLocalRequest(HttpContext context)
 {
-    var errors = new Dictionary<string, string[]>();
-
-    if (!string.IsNullOrWhiteSpace(ruleType) && ruleType is not ("include" or "exclude"))
+    if (context.Connection.RemoteIpAddress is null)
     {
-        errors["ruleType"] = ["Debe ser include o exclude."];
-    }
-
-    if (!string.IsNullOrWhiteSpace(scope) && scope is not ("all" or "ocds" or "nco"))
-    {
-        errors["scope"] = ["Debe ser all, ocds o nco."];
-    }
-
-    return errors;
-}
-
-static Dictionary<string, string[]> ValidateKeywordRuleRequest(KeywordRuleUpsertRequest request)
-{
-    var errors = ValidateKeywordRuleFilters(request.RuleType, request.Scope);
-
-    if (string.IsNullOrWhiteSpace(request.Keyword))
-    {
-        errors["keyword"] = ["La palabra clave es obligatoria."];
-    }
-
-    if (request.Weight <= 0)
-    {
-        errors["weight"] = ["El peso debe ser mayor que cero."];
-    }
-
-    return errors;
-}
-
-static Dictionary<string, string[]> ValidateZoneRequest(ZoneUpsertRequest request)
-{
-    var errors = new Dictionary<string, string[]>();
-
-    if (string.IsNullOrWhiteSpace(request.Name))
-    {
-        errors["name"] = ["El nombre de la zona es obligatorio."];
-    }
-
-    if (string.IsNullOrWhiteSpace(request.Code))
-    {
-        errors["code"] = ["El codigo de la zona es obligatorio."];
-    }
-    else
-    {
-        var normalizedCode = request.Code.Trim().ToUpperInvariant();
-        if (normalizedCode.Length is < 2 or > 12)
-        {
-            errors["code"] = ["El codigo debe tener entre 2 y 12 caracteres."];
-        }
-    }
-
-    return errors;
-}
-
-static async Task<Dictionary<string, string[]>> ValidateUserRequestAsync(UserUpsertRequest request, CrmRepository repository, CancellationToken cancellationToken)
-{
-    var errors = new Dictionary<string, string[]>();
-
-    if (string.IsNullOrWhiteSpace(request.FullName))
-    {
-        errors["fullName"] = ["El nombre completo es obligatorio."];
-    }
-
-    if (string.IsNullOrWhiteSpace(request.Email))
-    {
-        errors["email"] = ["El correo es obligatorio."];
-    }
-    else if (!IsValidEmail(request.Email))
-    {
-        errors["email"] = ["El correo no tiene un formato valido."];
-    }
-
-    var normalizedRole = request.Role?.Trim().ToLowerInvariant();
-    if (normalizedRole is not ("manager" or "seller" or "analyst"))
-    {
-        errors["role"] = ["El rol debe ser manager, seller o analyst."];
-    }
-
-    if (request.ZoneId.HasValue && !await repository.ZoneExistsAsync(request.ZoneId.Value, cancellationToken))
-    {
-        errors["zoneId"] = ["La zona seleccionada no existe."];
-    }
-
-    return errors;
-}
-
-static async Task<Dictionary<string, string[]>> ValidateAssignmentRequestAsync(OpportunityAssignmentRequest request, CrmRepository repository, CancellationToken cancellationToken)
-{
-    var errors = new Dictionary<string, string[]>();
-
-    if (!string.IsNullOrWhiteSpace(request.Estado))
-    {
-        var normalizedStatus = request.Estado.Trim().ToLowerInvariant();
-        if (normalizedStatus is not ("nuevo" or "en_revision" or "asignado" or "presentado" or "ganado" or "perdido" or "no_presentado"))
-        {
-            errors["estado"] = ["El estado no es valido."];
-        }
-    }
-
-    if (!string.IsNullOrWhiteSpace(request.Priority))
-    {
-        var normalizedPriority = request.Priority.Trim().ToLowerInvariant();
-        if (normalizedPriority is not ("alta" or "normal" or "baja"))
-        {
-            errors["priority"] = ["La prioridad debe ser alta, normal o baja."];
-        }
-    }
-
-    if (request.AssignedUserId.HasValue && !await repository.UserExistsAsync(request.AssignedUserId.Value, cancellationToken))
-    {
-        errors["assignedUserId"] = ["El vendedor seleccionado no existe."];
-    }
-
-    if (request.ZoneId.HasValue && !await repository.ZoneExistsAsync(request.ZoneId.Value, cancellationToken))
-    {
-        errors["zoneId"] = ["La zona seleccionada no existe."];
-    }
-
-    return errors;
-}
-
-static Dictionary<string, string[]> ValidateInvitationUpdateRequest(OpportunityInvitationUpdateRequest request)
-{
-    var errors = new Dictionary<string, string[]>();
-
-    if (request.IsInvitedMatch && string.IsNullOrWhiteSpace(request.InvitationSource))
-    {
-        errors["invitationSource"] = ["Debes indicar la fuente de la invitacion confirmada."];
-    }
-
-    return errors;
-}
-
-static bool IsValidEmail(string email)
-{
-    try
-    {
-        _ = new MailAddress(email.Trim());
         return true;
     }
-    catch
-    {
-        return false;
-    }
+
+    return IPAddress.IsLoopback(context.Connection.RemoteIpAddress)
+           || string.Equals(context.Request.Host.Host, "localhost", StringComparison.OrdinalIgnoreCase)
+           || string.Equals(context.Request.Host.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase);
 }
-
-static (int StatusCode, string Title, string Detail) MapPostgresException(PostgresException exception)
-{
-    return exception.SqlState switch
-    {
-        PostgresErrorCodes.UniqueViolation => (
-            StatusCodes.Status409Conflict,
-            "Conflicto de datos",
-            "Ya existe un registro con esos valores unicos. Revisa correo, nombre o codigo."),
-        PostgresErrorCodes.CheckViolation or PostgresErrorCodes.NotNullViolation or PostgresErrorCodes.StringDataRightTruncation => (
-            StatusCodes.Status400BadRequest,
-            "Datos invalidos",
-            "La base de datos rechazo la operacion por valores incompletos o fuera de formato."),
-        PostgresErrorCodes.ForeignKeyViolation => (
-            StatusCodes.Status400BadRequest,
-            "Relacion invalida",
-            "La operacion referencia una zona, usuario o proceso que no existe."),
-        _ => (
-            StatusCodes.Status500InternalServerError,
-            "Error interno del CRM",
-            "La solicitud no se pudo completar. Revisa el backend o los datos de PostgreSQL."),
-    };
-}
-
-

@@ -32,7 +32,8 @@
 
 - Mantener `N8N_BASIC_AUTH_ACTIVE=true`.
 - Cambiar `N8N_BASIC_AUTH_PASSWORD` y `POSTGRES_PASSWORD`.
-- Cambiar `CRM_BASIC_AUTH_PASSWORD` antes de publicar el CRM fuera de la red local.
+- Definir `CRM_ADMIN_LOGIN` y `CRM_AUTH_BOOTSTRAP_PASSWORD`.
+- Mantener `CRM_REQUIRE_HTTPS=true` para accesos externos.
 - Usar `N8N_ENCRYPTION_KEY` distinta por entorno.
 - No exponer `ngrok` sin `NGROK_AUTHTOKEN`.
 - Preferir `Cloudflare Quick Tunnel` o un tunel con dominio propio antes que abrir puertos del router.

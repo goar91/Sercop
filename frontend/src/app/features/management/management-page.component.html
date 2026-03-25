@@ -1,0 +1,139 @@
+<section class="page">
+  <header class="page-head">
+    <div>
+      <span class="eyebrow">Gerencia</span>
+      <h1>Reporte ejecutivo del pipeline quimico</h1>
+      <p>Lectura de carga, acierto, vendedores, zonas y alertas sobre procesos visibles.</p>
+    </div>
+
+    <label class="range-picker">
+      <span>Rango</span>
+      <select [ngModel]="range()" (ngModelChange)="updateRange($event)">
+        <option value="7d">7 dias</option>
+        <option value="30d">30 dias</option>
+        <option value="90d">90 dias</option>
+        <option value="365d">365 dias</option>
+        <option value="all">Todo</option>
+      </select>
+    </label>
+  </header>
+
+  @if (loading()) {
+    <div class="panel">Cargando reporte gerencial...</div>
+  } @else if (report(); as reportData) {
+    <section class="kpis">
+      <article class="kpi">
+        <span>Visibles</span>
+        <strong>{{ reportData.summary.totalVisibleOpportunities }}</strong>
+      </article>
+      <article class="kpi">
+        <span>Participando</span>
+        <strong>{{ reportData.summary.participatingOpportunities }}</strong>
+      </article>
+      <article class="kpi accent">
+        <span>Tasa de acierto</span>
+        <strong>{{ reportData.summary.overallHitRatePercent }}%</strong>
+      </article>
+      <article class="kpi">
+        <span>Monto ganado</span>
+        <strong>{{ reportData.summary.totalWonAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
+      </article>
+    </section>
+
+    <section class="management-grid">
+      <article class="panel">
+        <div class="panel-head"><h2>Embudo</h2></div>
+        <div class="bar-list">
+          @for (metric of reportData.pipeline; track metric.label) {
+            <div class="bar-row">
+              <div class="bar-meta">
+                <span>{{ metric.label }}</span>
+                <strong>{{ metric.count }}</strong>
+              </div>
+              <div class="bar-track">
+                <div class="bar-fill" [style.width.%]="metric.count * 100 / maxPipeline()"></div>
+              </div>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><h2>Alertas</h2></div>
+        <div class="alert-list">
+          @for (alert of reportData.alerts; track alert.code) {
+            <div class="alert-item" [class.high]="alert.severity === 'high'">
+              <span>{{ alert.label }}</span>
+              <strong>{{ alert.count }}</strong>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><h2>Aging</h2></div>
+        <div class="metric-list">
+          @for (bucket of reportData.aging; track bucket.bucket) {
+            <div class="metric-row">
+              <span>{{ bucket.bucket }}</span>
+              <strong>{{ bucket.count }}</strong>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel sellers-panel">
+        <div class="panel-head"><h2>Rendimiento por vendedor</h2></div>
+        <div class="seller-list">
+          @for (seller of reportData.sellers; track seller.sellerName) {
+            <div class="seller-card">
+              <div class="seller-head">
+                <strong>{{ seller.sellerName }}</strong>
+                <span>{{ seller.hitRatePercent }}% acierto</span>
+              </div>
+              <div class="seller-bar">
+                <div class="seller-fill" [style.width.%]="seller.wonCount * 100 / maxSellerWins()"></div>
+              </div>
+              <div class="seller-metrics">
+                <span>Asignados {{ seller.assignedCount }}</span>
+                <span>Ganados {{ seller.wonCount }}</span>
+                <span>Participando {{ seller.participatingCount }}</span>
+              </div>
+              @if (seller.winningAreas.length > 0) {
+                <div class="chip-row">
+                  @for (area of seller.winningAreas; track area) {
+                    <span class="chip">{{ area }}</span>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><h2>Zonas</h2></div>
+        <div class="metric-list">
+          @for (zone of reportData.zoneMetrics; track zone.zoneName) {
+            <div class="metric-row">
+              <span>{{ zone.zoneName }}</span>
+              <strong>{{ zone.hitRatePercent }}%</strong>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head"><h2>Areas ganadas</h2></div>
+        <div class="metric-list">
+          @for (area of reportData.winningAreas; track area.area) {
+            <div class="metric-row">
+              <span>{{ area.area }}</span>
+              <strong>{{ area.wonCount }}</strong>
+            </div>
+          }
+        </div>
+      </article>
+    </section>
+  }
+</section>

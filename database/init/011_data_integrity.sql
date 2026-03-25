@@ -8,7 +8,7 @@ UPDATE crm_users
 SET role = 'seller'
 WHERE role IS NULL
    OR btrim(role) = ''
-   OR lower(role) NOT IN ('manager', 'seller', 'analyst');
+   OR lower(role) NOT IN ('admin', 'gerencia', 'coordinator', 'manager', 'seller', 'analyst');
 
 DELETE FROM crm_zones
 WHERE btrim(COALESCE(name, '')) = ''
@@ -79,7 +79,7 @@ BEGIN
   ) THEN
     ALTER TABLE crm_users
       ADD CONSTRAINT crm_users_role_valid
-      CHECK (lower(role) IN ('manager', 'seller', 'analyst'));
+      CHECK (lower(role) IN ('admin', 'gerencia', 'coordinator', 'manager', 'seller', 'analyst'));
   END IF;
 END $$;
 

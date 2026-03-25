@@ -29,6 +29,12 @@ type CommercialGrouping = 'age' | 'status';
 export class CommercialPageComponent {
   private readonly api = inject(CrmApiService);
   private readonly auth = inject(AuthService);
+  private readonly ecuadorDateFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Guayaquil',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
 
   protected readonly loading = signal(true);
   protected readonly detailLoading = signal(false);
@@ -155,18 +161,18 @@ export class CommercialPageComponent {
   protected readonly invitedLane = computed(() => this.opportunities().filter((item) => item.isInvitedMatch));
   protected readonly newProcessesLane = computed(() => 
     this.opportunities()
-      .filter((item) => !item.isInvitedMatch && item.daysOpen === 0)
-      .sort((a, b) => (b.fechaPublicacion ? new Date(b.fechaPublicacion).getTime() : 0) - (a.fechaPublicacion ? new Date(a.fechaPublicacion).getTime() : 0))
+      .filter((item) => !item.isInvitedMatch && this.isPublishedTodayInEcuador(item))
+      .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
   );
   protected readonly currentLane = computed(() => 
     this.opportunities()
-      .filter((item) => !item.isInvitedMatch && item.daysOpen > 0 && item.daysOpen <= 1)
-      .sort((a, b) => a.daysOpen - b.daysOpen)
+      .filter((item) => !item.isInvitedMatch && !this.isPublishedTodayInEcuador(item) && item.daysOpen <= 1)
+      .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
   );
   protected readonly staleLane = computed(() => 
     this.opportunities()
       .filter((item) => !item.isInvitedMatch && item.daysOpen > 1)
-      .sort((a, b) => a.daysOpen - b.daysOpen)
+      .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
   );
   protected readonly statusGroups = computed(() => {
     const groups = new Map<string, OpportunityListItem[]>();
@@ -182,6 +188,35 @@ export class CommercialPageComponent {
 
   constructor() {
     void this.initialize();
+  }
+
+  private isPublishedTodayInEcuador(item: OpportunityListItem): boolean {
+    return this.getEcuadorDateKey(item.fechaPublicacion) === this.getEcuadorTodayKey();
+  }
+
+  private getPublicationTimestamp(item: OpportunityListItem): number {
+    return item.fechaPublicacion ? new Date(item.fechaPublicacion).getTime() : 0;
+  }
+
+  private getEcuadorTodayKey(): string {
+    return this.getEcuadorDateKey(new Date().toISOString()) ?? '';
+  }
+
+  private getEcuadorDateKey(value?: string | null): string | null {
+    if (!value) {
+      return null;
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+
+    const parts = this.ecuadorDateFormatter.formatToParts(date);
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+    return year && month && day ? `${year}-${month}-${day}` : null;
   }
 
   protected patchFilters<K extends keyof ReturnType<typeof this.filters>>(field: K, value: ReturnType<typeof this.filters>[K]): void {
@@ -441,6 +476,10 @@ export class CommercialPageComponent {
 
   protected alertTone(severity: string | null | undefined): string {
     return (severity ?? '').toLowerCase() === 'critical' ? 'high' : 'warning';
+  }
+
+  protected alertSeverityLabel(severity: string | null | undefined): string {
+    return (severity ?? '').toLowerCase() === 'critical' ? 'Critica' : 'Advertencia';
   }
 
   private async initialize(): Promise<void> {

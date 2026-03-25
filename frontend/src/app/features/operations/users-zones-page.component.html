@@ -1,0 +1,97 @@
+@if (loading()) {
+  <div class="panel">Cargando usuarios y zonas...</div>
+} @else {
+  <section class="layout">
+    <article class="panel table-panel">
+      <div class="panel-head">
+        <h2>Zonas</h2>
+        <button type="button" class="ghost" (click)="resetZoneForm()">Nueva zona</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Zona</th>
+              <th>Codigo</th>
+              <th>Activa</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (zone of zones(); track zone.id) {
+              <tr (click)="editZone(zone)">
+                <td>{{ zone.name }}</td>
+                <td>{{ zone.code }}</td>
+                <td>{{ zone.active ? 'Si' : 'No' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </article>
+
+    <article class="panel editor-panel">
+      <div class="panel-head"><h2>Editor de zona</h2></div>
+      <div class="form-grid">
+        <label><span>Nombre</span><input [ngModel]="zoneForm().name" (ngModelChange)="patchZoneForm('name', $event)" /></label>
+        <label><span>Codigo</span><input [ngModel]="zoneForm().code" (ngModelChange)="patchZoneForm('code', $event)" /></label>
+        <label class="full"><span>Descripcion</span><textarea [ngModel]="zoneForm().description" (ngModelChange)="patchZoneForm('description', $event)"></textarea></label>
+        <label class="switch"><input type="checkbox" [ngModel]="zoneForm().active" (ngModelChange)="patchZoneForm('active', $event)" /> Zona activa</label>
+      </div>
+      <button type="button" (click)="saveZone()">Guardar zona</button>
+    </article>
+
+    <article class="panel table-panel">
+      <div class="panel-head">
+        <h2>Usuarios</h2>
+        <button type="button" class="ghost" (click)="resetUserForm()">Nuevo usuario</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Login</th>
+              <th>Nombre</th>
+              <th>Rol</th>
+              <th>Zona</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of users(); track user.id) {
+              <tr (click)="editUser(user)">
+                <td>{{ user.loginName }}</td>
+                <td>{{ user.fullName }}</td>
+                <td>{{ user.role }}</td>
+                <td>{{ user.zoneName || 'Sin zona' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button type="button" class="ghost" (click)="changeUserPage(userPage() - 1)">Anterior</button>
+        <span>Pagina {{ userPage() }} · {{ userTotal() }} usuarios</span>
+        <button type="button" class="ghost" (click)="changeUserPage(userPage() + 1)">Siguiente</button>
+      </div>
+    </article>
+
+    <article class="panel editor-panel">
+      <div class="panel-head"><h2>Editor de usuario</h2></div>
+      <div class="form-grid">
+        <label><span>Login</span><input [ngModel]="userForm().loginName" (ngModelChange)="patchUserForm('loginName', $event)" /></label>
+        <label><span>Nombre</span><input [ngModel]="userForm().fullName" (ngModelChange)="patchUserForm('fullName', $event)" /></label>
+        <label><span>Correo</span><input [ngModel]="userForm().email" (ngModelChange)="patchUserForm('email', $event)" /></label>
+        <label><span>Rol</span><select [ngModel]="userForm().role" (ngModelChange)="patchUserForm('role', $event)"><option value="admin">admin</option><option value="gerencia">gerencia</option><option value="coordinator">coordinator</option><option value="seller">seller</option><option value="analyst">analyst</option></select></label>
+        <label><span>Telefono</span><input [ngModel]="userForm().phone" (ngModelChange)="patchUserForm('phone', $event)" /></label>
+        <label><span>Zona</span><select [ngModel]="userForm().zoneId" (ngModelChange)="patchUserForm('zoneId', $event)"><option value="">Sin zona</option>@for (zone of zones(); track zone.id) { <option [value]="zone.id">{{ zone.name }}</option> }</select></label>
+        <label><span>Clave {{ userForm().id ? '(opcional)' : '' }}</span><input type="password" [ngModel]="userForm().password" (ngModelChange)="patchUserForm('password', $event)" /></label>
+        <label class="switch"><input type="checkbox" [ngModel]="userForm().active" (ngModelChange)="patchUserForm('active', $event)" /> Usuario activo</label>
+        <label class="switch"><input type="checkbox" [ngModel]="userForm().mustChangePassword" (ngModelChange)="patchUserForm('mustChangePassword', $event)" /> Forzar cambio de clave</label>
+      </div>
+      <button type="button" (click)="saveUser()">Guardar usuario</button>
+    </article>
+  </section>
+
+  @if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  }
+}

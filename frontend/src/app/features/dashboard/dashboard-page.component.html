@@ -1,0 +1,82 @@
+<section class="page">
+  <header class="hero">
+    <div>
+      <span class="eyebrow">Resumen</span>
+      <h1>Control diario del pipeline SERCOP</h1>
+      <p>Vista ejecutiva del flujo comercial, cobertura territorial y automatizaciones activas.</p>
+    </div>
+
+    @if (meta(); as metaInfo) {
+      <article class="hero-card">
+        <strong>Fuente de verdad</strong>
+        <span>{{ metaInfo.storageTarget }}</span>
+        <small>{{ metaInfo.storageMode }}</small>
+      </article>
+    }
+  </header>
+
+  @if (loading()) {
+    <div class="panel">Cargando dashboard...</div>
+  } @else if (summary(); as dashboard) {
+    <section class="kpis">
+      <article class="kpi">
+        <span>Total visibles</span>
+        <strong>{{ dashboard.totalOpportunities }}</strong>
+      </article>
+      <article class="kpi accent">
+        <span>Invitados HDM</span>
+        <strong>{{ dashboard.invitedOpportunities }}</strong>
+      </article>
+      <article class="kpi">
+        <span>Asignados</span>
+        <strong>{{ dashboard.assignedOpportunities }}</strong>
+      </article>
+      <article class="kpi">
+        <span>Sin asignar</span>
+        <strong>{{ dashboard.unassignedOpportunities }}</strong>
+      </article>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Accesos directos</h2>
+        </div>
+        <div class="quick-links">
+          <a routerLink="/commercial">Ir al tablero comercial</a>
+          <a routerLink="/management">Abrir gerencia</a>
+          <a routerLink="/operations/users-zones">Configurar operacion</a>
+          <a routerLink="/automation">Ver workflows</a>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Estados</h2>
+        </div>
+        <div class="metric-list">
+          @for (status of dashboard.statuses; track status.label) {
+            <div class="metric-row">
+              <span>{{ status.label }}</span>
+              <strong>{{ status.count }}</strong>
+            </div>
+          }
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <h2>Carga por zona</h2>
+        </div>
+        <div class="metric-list">
+          @for (zone of dashboard.zoneLoads; track zone.zoneName) {
+            <div class="metric-row">
+              <span>{{ zone.zoneName }}</span>
+              <strong>{{ zone.count }}</strong>
+            </div>
+          }
+        </div>
+      </article>
+    </section>
+  }
+</section>

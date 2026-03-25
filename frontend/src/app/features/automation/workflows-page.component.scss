@@ -1,0 +1,136 @@
+.page {
+  display: grid;
+  gap: 1rem;
+}
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
+.page-head h1 {
+  margin: 0.35rem 0;
+  color: #173644;
+}
+
+.page-head p,
+.muted {
+  margin: 0;
+  color: #5f6e73;
+}
+
+.eyebrow {
+  color: #0b6a5f;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stats,
+.panel {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(8, 49, 66, 0.08);
+  background: rgba(255, 252, 246, 0.92);
+  box-shadow: 0 16px 28px rgba(8, 49, 66, 0.06);
+}
+
+.stats {
+  display: grid;
+  place-items: center;
+  min-width: 140px;
+  padding: 1rem;
+}
+
+.stats strong {
+  font-size: 2rem;
+  color: #173644;
+}
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 0.95fr 1.05fr;
+}
+
+.panel {
+  padding: 1rem;
+}
+
+.list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.workflow-card,
+.ghost {
+  min-height: 48px;
+  border-radius: 1rem;
+  font: inherit;
+}
+
+.workflow-card {
+  display: grid;
+  gap: 0.25rem;
+  border: 1px solid rgba(18, 63, 95, 0.12);
+  background: #fffdf8;
+  padding: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.workflow-card span {
+  color: #5f6e73;
+  font-size: 0.9rem;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0;
+}
+
+.chip {
+  border-radius: 999px;
+  background: rgba(18, 63, 95, 0.08);
+  padding: 0.35rem 0.7rem;
+  color: #173644;
+  font-size: 0.82rem;
+}
+
+pre {
+  overflow: auto;
+  border-radius: 1rem;
+  background: #173644;
+  padding: 1rem;
+  color: #eaf2f5;
+  font-size: 0.8rem;
+}
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.ghost {
+  border: 0;
+  background: rgba(18, 63, 95, 0.08);
+  padding: 0.8rem 1rem;
+  color: #173644;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .page-head,
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}

@@ -44,8 +44,18 @@ Solucion local para monitorear procesos del SERCOP, confirmar invitaciones a HDM
 
 - CRM: `http://localhost:5050`
 - API CRM: `http://localhost:5050/api`
+- Swagger CRM: `http://localhost:5050/swagger`
 - n8n: `http://localhost:5678`
 - Mailpit: `http://localhost:8025`
+
+## Acceso al CRM
+
+- El CRM ya no usa `BasicAuth`.
+- El acceso es por formulario en `http://localhost:5050/login`.
+- El usuario bootstrap sale de `.env`:
+  - `CRM_ADMIN_LOGIN`
+  - `CRM_AUTH_BOOTSTRAP_PASSWORD`
+- `Swagger` queda protegido por la misma sesion autenticada del CRM.
 
 ## Acceso externo al CRM
 
@@ -60,6 +70,8 @@ Solucion local para monitorear procesos del SERCOP, confirmar invitaciones a HDM
 
 - Verificacion general:
   - `powershell -ExecutionPolicy Bypass -File scripts\verify-stack.ps1 -Live`
+- Inicializacion/refresco de PostgreSQL local:
+  - `powershell -ExecutionPolicy Bypass -File scripts\init-local-postgres.ps1`
 - Build CRM:
   - `powershell -ExecutionPolicy Bypass -File scripts\build-crm.ps1`
 - Iniciar stack completo:

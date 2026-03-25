@@ -1,0 +1,73 @@
+<section class="grid">
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Listado de reglas</h2>
+      <button type="button" class="ghost" (click)="resetForm()">Nueva regla</button>
+    </div>
+
+    <div class="filters">
+      <select [ngModel]="filters().ruleType" (ngModelChange)="patchFilters('ruleType', $event); applyFilters()">
+        <option value="">Todos los tipos</option>
+        <option value="include">include</option>
+        <option value="exclude">exclude</option>
+      </select>
+      <select [ngModel]="filters().scope" (ngModelChange)="patchFilters('scope', $event); applyFilters()">
+        <option value="">Todos los scopes</option>
+        <option value="all">all</option>
+        <option value="ocds">ocds</option>
+        <option value="nco">nco</option>
+      </select>
+    </div>
+
+    @if (loading()) {
+      <div class="empty">Cargando reglas...</div>
+    } @else {
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Keyword</th>
+              <th>Tipo</th>
+              <th>Scope</th>
+              <th>Familia</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (rule of rules(); track rule.id) {
+              <tr>
+                <td>{{ rule.keyword }}</td>
+                <td>{{ rule.ruleType }}</td>
+                <td>{{ rule.scope }}</td>
+                <td>{{ rule.family || '-' }}</td>
+                <td class="actions">
+                  <button type="button" class="ghost" (click)="editRule(rule)">Editar</button>
+                  <button type="button" class="danger" (click)="deleteRule(rule.id)">Eliminar</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button type="button" class="ghost" (click)="changePage(-1)">Anterior</button>
+        <span>Pagina {{ page() }} · {{ total() }} reglas</span>
+        <button type="button" class="ghost" (click)="changePage(1)">Siguiente</button>
+      </div>
+    }
+  </article>
+
+  <article class="panel">
+    <div class="panel-head"><h2>Editor</h2></div>
+    <div class="form-grid">
+      <label><span>Tipo</span><select [ngModel]="form().ruleType" (ngModelChange)="patchForm('ruleType', $event)"><option value="include">include</option><option value="exclude">exclude</option></select></label>
+      <label><span>Scope</span><select [ngModel]="form().scope" (ngModelChange)="patchForm('scope', $event)"><option value="all">all</option><option value="ocds">ocds</option><option value="nco">nco</option></select></label>
+      <label class="full"><span>Keyword</span><input [ngModel]="form().keyword" (ngModelChange)="patchForm('keyword', $event)" /></label>
+      <label><span>Familia</span><input [ngModel]="form().family" (ngModelChange)="patchForm('family', $event)" /></label>
+      <label><span>Peso</span><input type="number" [ngModel]="form().weight" (ngModelChange)="patchForm('weight', $event)" /></label>
+      <label class="full"><span>Notas</span><textarea [ngModel]="form().notes" (ngModelChange)="patchForm('notes', $event)"></textarea></label>
+      <label class="switch"><input type="checkbox" [ngModel]="form().active" (ngModelChange)="patchForm('active', $event)" /> Regla activa</label>
+    </div>
+    <button type="button" (click)="saveRule()">Guardar regla</button>
+  </article>
+</section>

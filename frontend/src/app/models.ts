@@ -1,3 +1,40 @@
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface MetaInfo {
+  n8nEditorUrl: string;
+  storageMode: string;
+  storageTarget: string;
+  responsibleEmail?: string | null;
+  invitedCompanyName: string;
+}
+
+export interface CurrentUser {
+  id: number;
+  loginName: string;
+  fullName: string;
+  email: string;
+  role: 'admin' | 'gerencia' | 'coordinator' | 'seller' | 'analyst';
+  zoneId?: number | null;
+  zoneName?: string | null;
+  mustChangePassword: boolean;
+}
+
+export interface LoginRequest {
+  identifier: string;
+  password: string;
+  rememberMe: boolean;
+}
+
+export interface LoginResponse {
+  user: CurrentUser;
+  message: string;
+}
+
 export interface DashboardMetric {
   label: string;
   count: number;
@@ -21,48 +58,20 @@ export interface DashboardSummary {
   zoneLoads: ZoneLoad[];
 }
 
-export interface ManagementSummary {
-  totalVisibleOpportunities: number;
-  assignedOpportunities: number;
-  participatingOpportunities: number;
-  wonOpportunities: number;
-  lostOpportunities: number;
-  notPresentedOpportunities: number;
-  activeSellers: number;
-  overallHitRatePercent: number;
-  totalWonAmount: number;
-  salesShareBasis: string;
+export interface CommercialAlertItem {
+  opportunityId: number;
+  processCode: string;
+  titulo: string;
+  severity: 'critical' | 'warning' | string;
+  message: string;
+  referenceAt?: string | null;
 }
 
-export interface ManagementStageMetric {
-  label: string;
-  count: number;
-}
-
-export interface ManagementSellerPerformance {
-  sellerId?: number | null;
-  sellerName: string;
-  assignedCount: number;
-  participatingCount: number;
-  wonCount: number;
-  lostCount: number;
-  notPresentedCount: number;
-  salesAmount: number;
-  salesSharePercent: number;
-  hitRatePercent: number;
-  winningAreas: string[];
-}
-
-export interface ManagementAreaWin {
-  area: string;
-  wonCount: number;
-}
-
-export interface ManagementReport {
-  summary: ManagementSummary;
-  pipeline: ManagementStageMetric[];
-  sellers: ManagementSellerPerformance[];
-  winningAreas: ManagementAreaWin[];
+export interface CommercialAlertSummary {
+  totalAlerts: number;
+  criticalAlerts: number;
+  warningAlerts: number;
+  items: CommercialAlertItem[];
 }
 
 export interface OpportunityListItem {
@@ -90,6 +99,12 @@ export interface OpportunityListItem {
   priority: string;
   zoneName?: string | null;
   assignedUserName?: string | null;
+  daysOpen: number;
+  agingBucket: string;
+  lastActivityAt?: string | null;
+  nextActionAt?: string | null;
+  hasPendingAction: boolean;
+  slaStatus: string;
 }
 
 export interface AssignmentHistoryItem {
@@ -102,6 +117,26 @@ export interface AssignmentHistoryItem {
   newStatus?: string | null;
   notes?: string | null;
   changedAt: string;
+}
+
+export interface OpportunityReminder {
+  id: number;
+  remindAt: string;
+  notes?: string | null;
+  createdByUserId?: number | null;
+  createdByUserName?: string | null;
+  createdAt: string;
+  completedAt?: string | null;
+}
+
+export interface OpportunityActivity {
+  id: number;
+  activityType: string;
+  body?: string | null;
+  metadataJson: string;
+  createdByUserId?: number | null;
+  createdByUserName?: string | null;
+  createdAt: string;
 }
 
 export interface OpportunityDetail {
@@ -139,7 +174,70 @@ export interface OpportunityDetail {
   assignedUserId?: number | null;
   assignedUserName?: string | null;
   assignedUserEmail?: string | null;
+  daysOpen: number;
+  agingBucket: string;
+  lastActivityAt?: string | null;
+  nextActionAt?: string | null;
+  hasPendingAction: boolean;
+  slaStatus: string;
+  reminder?: OpportunityReminder | null;
   assignmentHistory: AssignmentHistoryItem[];
+}
+
+export interface OpportunityAssignmentRequest {
+  assignedUserId?: number | null;
+  zoneId?: number | null;
+  estado?: string | null;
+  priority?: string | null;
+  notes?: string | null;
+}
+
+export interface OpportunityActivityCreateRequest {
+  activityType: string;
+  body?: string | null;
+  metadataJson?: string | null;
+}
+
+export interface OpportunityReminderUpsertRequest {
+  remindAt?: string | null;
+  notes?: string | null;
+}
+
+export interface OpportunityInvitationUpdateRequest {
+  isInvitedMatch: boolean;
+  invitationSource?: string | null;
+  invitationEvidenceUrl?: string | null;
+  invitationNotes?: string | null;
+}
+
+export interface OpportunityVisibility {
+  processCode: string;
+  existsInDatabase: boolean;
+  visible: boolean;
+  opportunityId?: number | null;
+  reasons: string[];
+}
+
+export interface BulkInvitationImportRequest {
+  codesText: string;
+  invitationSource?: string | null;
+  invitationEvidenceUrl?: string | null;
+  invitationNotes?: string | null;
+}
+
+export interface BulkInvitationImportResult {
+  requestedCount: number;
+  confirmedCount: number;
+  updatedCodes: string[];
+  unmatchedCodes: string[];
+}
+
+export interface InvitationSyncResult {
+  scannedCount: number;
+  confirmedCount: number;
+  updatedCount: number;
+  confirmedProcessCodes: string[];
+  errors: string[];
 }
 
 export interface Zone {
@@ -159,6 +257,7 @@ export interface ZoneUpsertRequest {
 
 export interface User {
   id: number;
+  loginName: string;
   fullName: string;
   email: string;
   role: string;
@@ -166,15 +265,20 @@ export interface User {
   active: boolean;
   zoneId?: number | null;
   zoneName?: string | null;
+  mustChangePassword: boolean;
+  lastLoginAt?: string | null;
 }
 
 export interface UserUpsertRequest {
+  loginName: string;
   fullName: string;
   email: string;
   role: string;
   phone?: string | null;
   active: boolean;
   zoneId?: number | null;
+  password?: string | null;
+  mustChangePassword: boolean;
 }
 
 export interface KeywordRule {
@@ -200,43 +304,6 @@ export interface KeywordRuleUpsertRequest {
   active: boolean;
 }
 
-export interface OpportunityAssignmentRequest {
-  assignedUserId?: number | null;
-  zoneId?: number | null;
-  estado?: string | null;
-  priority?: string | null;
-  notes?: string | null;
-}
-
-export interface OpportunityInvitationUpdateRequest {
-  isInvitedMatch: boolean;
-  invitationSource?: string | null;
-  invitationEvidenceUrl?: string | null;
-  invitationNotes?: string | null;
-}
-
-export interface BulkInvitationImportRequest {
-  codesText: string;
-  invitationSource?: string | null;
-  invitationEvidenceUrl?: string | null;
-  invitationNotes?: string | null;
-}
-
-export interface BulkInvitationImportResult {
-  requestedCount: number;
-  confirmedCount: number;
-  updatedCodes: string[];
-  unmatchedCodes: string[];
-}
-
-export interface InvitationSyncResult {
-  scannedCount: number;
-  confirmedCount: number;
-  updatedCount: number;
-  confirmedProcessCodes: string[];
-  errors: string[];
-}
-
 export interface WorkflowNode {
   id: string;
   name: string;
@@ -260,10 +327,95 @@ export interface WorkflowDetail extends WorkflowSummary {
   connectionsJson: string;
 }
 
-export interface MetaInfo {
-  n8nEditorUrl: string;
-  storageMode: string;
-  storageTarget: string;
-  responsibleEmail?: string | null;
-  invitedCompanyName: string;
+export interface SavedView {
+  id: number;
+  userId: number;
+  viewType: string;
+  name: string;
+  filtersJson: string;
+  shared: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavedViewUpsertRequest {
+  viewType: string;
+  name: string;
+  filtersJson: string;
+  shared: boolean;
+}
+
+export interface ManagementSummary {
+  range: string;
+  totalVisibleOpportunities: number;
+  assignedOpportunities: number;
+  participatingOpportunities: number;
+  wonOpportunities: number;
+  lostOpportunities: number;
+  notPresentedOpportunities: number;
+  activeSellers: number;
+  overallHitRatePercent: number;
+  totalWonAmount: number;
+  salesShareBasis: string;
+}
+
+export interface ManagementStageMetric {
+  label: string;
+  count: number;
+}
+
+export interface ManagementSellerPerformance {
+  sellerId?: number | null;
+  sellerName: string;
+  assignedCount: number;
+  participatingCount: number;
+  wonCount: number;
+  lostCount: number;
+  notPresentedCount: number;
+  salesAmount: number;
+  salesSharePercent: number;
+  hitRatePercent: number;
+  winningAreas: string[];
+}
+
+export interface ManagementAreaWin {
+  area: string;
+  wonCount: number;
+}
+
+export interface ManagementZoneMetric {
+  zoneId?: number | null;
+  zoneName: string;
+  assignedCount: number;
+  wonCount: number;
+  hitRatePercent: number;
+}
+
+export interface ManagementAlert {
+  code: string;
+  label: string;
+  count: number;
+  severity: string;
+}
+
+export interface ManagementAgingBucket {
+  bucket: string;
+  count: number;
+}
+
+export interface ManagementTrendPoint {
+  label: string;
+  createdCount: number;
+  wonCount: number;
+}
+
+export interface ManagementReport {
+  summary: ManagementSummary;
+  pipeline: ManagementStageMetric[];
+  sellers: ManagementSellerPerformance[];
+  winningAreas: ManagementAreaWin[];
+  zoneMetrics: ManagementZoneMetric[];
+  alerts: ManagementAlert[];
+  aging: ManagementAgingBucket[];
+  trend: ManagementTrendPoint[];
 }

@@ -33,50 +33,44 @@
       <div class="section-head">
         <div>
           <h2>{{ isSeller() ? 'Mis alertas comerciales' : 'Alertas comerciales del equipo' }}</h2>
-          <p>Procesos publicados hoy con oportunidades de acción inmediata.</p>
+          <p>Solo procesos recientes y alertas vigentes de las ultimas 48 horas, ordenados por prioridad y fecha real en Ecuador.</p>
         </div>
         <div class="alert-kpis">
           <article>
-            <span>Nuevos hoy</span>
+            <span>Recientes</span>
             <strong>{{ newProcessesLane().length }}</strong>
           </article>
           <article>
-            <span>Por vencer</span>
-            <strong>{{ staleLane().length }}</strong>
+            <span>Criticas</span>
+            <strong>{{ alerts.criticalAlerts }}</strong>
           </article>
           <article>
-            <span>Invitados HDM</span>
-            <strong>{{ invitedLane().length }}</strong>
+            <span>Advertencias</span>
+            <strong>{{ alerts.warningAlerts }}</strong>
           </article>
         </div>
       </div>
 
-      @if (newProcessesLane().length > 0) {
+      @if (commercialAlerts().length > 0) {
         <div class="alert-list">
-          @for (item of newProcessesLane() | slice:0:8; track item.id) {
-            <article class="alert-item new-process" [attr.data-tone]="'new'">
+          @for (alert of commercialAlerts(); track alert.opportunityId + alert.message) {
+            <article class="alert-item" [attr.data-tone]="alertTone(alert.severity)">
               <div class="alert-item-top">
-                <span class="process-code" title="Código de proceso">{{ item.processCode }}</span>
-                <span class="status-pill new-badge">NUEVO</span>
+                <span class="process-code alert-process-code" [title]="alert.processCode">{{ alert.processCode }}</span>
+                <span class="status-pill" [attr.data-tone]="alertTone(alert.severity)">{{ alertSeverityLabel(alert.severity) }}</span>
               </div>
-              <strong class="alert-title">{{ item.titulo }}</strong>
+              <strong class="alert-title" [title]="alert.titulo">{{ alert.titulo }}</strong>
               <div class="alert-details">
-                <span class="alert-detail"><strong>Entidad:</strong> {{ item.entidad || 'No registrada' }}</span>
-                <span class="alert-detail"><strong>Publicado:</strong> {{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
-                <span class="alert-detail"><strong>Vence:</strong> {{ item.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</span>
-              </div>
-              <div class="alert-tags">
-                <span class="tag">{{ humanizeLabel(item.estado) }}</span>
-                <span class="tag" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
+                <span class="alert-detail">{{ alert.message }}</span>
+                @if (alert.referenceAt) {
+                  <span class="alert-detail"><strong>Referencia:</strong> {{ alert.referenceAt | date:'dd/MM/yyyy HH:mm' }}</span>
+                }
               </div>
             </article>
           }
         </div>
-        @if (newProcessesLane().length > 8) {
-          <div class="alert-footer">+{{ newProcessesLane().length - 8 }} más procesos nuevos</div>
-        }
       } @else {
-        <div class="info-card">No hay procesos nuevos publicados hoy.</div>
+        <div class="info-card">No hay alertas recientes para los procesos visibles con tu perfil actual.</div>
       }
     </section>
   }
@@ -264,25 +258,42 @@
               <header>
                 <div>
                   <h3>0-1 día</h3>
-                  <p>Procesos recientes ordenados por antigüedad.</p>
+                  <p>Procesos recientes de ayer o dentro de la ventana corta, ordenados por publicación.</p>
                 </div>
                 <span class="lane-count">{{ currentLane().length }}</span>
               </header>
-              <div class="lane-scroll">
+              <div class="lane-scroll lane-scroll-current">
                 @for (item of currentLane(); track item.id) {
-                  <button type="button" class="opportunity-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                  <button type="button" class="opportunity-card opportunity-card-stale" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
                     <div class="card-top">
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
-                      <span class="status-pill subtle">{{ humanizeLabel(item.estado) }}</span>
+                      <div class="card-top-tags">
+                        <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                        <span class="status-pill subtle">{{ item.daysOpen }} día{{ item.daysOpen === 1 ? '' : 's' }}</span>
+                      </div>
                     </div>
-                    <span class="card-title">{{ item.titulo }}</span>
-                    <div class="card-meta">
-                      <span>{{ item.entidad || 'Entidad no registrada' }}</span>
-                      <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                    <strong class="card-title card-title-stale" [title]="item.titulo">{{ item.titulo }}</strong>
+                    <div class="card-summary-grid">
+                      <div>
+                        <small>Entidad</small>
+                        <span>{{ item.entidad || 'Entidad no registrada' }}</span>
+                      </div>
+                      <div>
+                        <small>Responsable</small>
+                        <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                      </div>
+                      <div>
+                        <small>Publicado</small>
+                        <span>{{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
+                      </div>
+                      <div>
+                        <small>Límite</small>
+                        <span>{{ item.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</span>
+                      </div>
                     </div>
                     <div class="card-foot">
                       <span class="status-pill" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
-                      <span class="card-foot-inline">{{ item.daysOpen }} días</span>
+                      <span class="card-foot-inline">{{ humanizeLabel(item.estado) }}</span>
                     </div>
                   </button>
                 }

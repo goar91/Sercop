@@ -1,0 +1,58 @@
+<section class="grid">
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Importacion manual de invitaciones</h2>
+      <button type="button" (click)="importCodes()">{{ importing() ? 'Importando...' : 'Importar codigos' }}</button>
+    </div>
+
+    <div class="form-grid">
+      <label class="full">
+        <span>Codigos de proceso</span>
+        <textarea [ngModel]="form().codesText" (ngModelChange)="patchForm('codesText', $event)" placeholder="Un codigo por linea"></textarea>
+      </label>
+      <label>
+        <span>Fuente</span>
+        <input [ngModel]="form().invitationSource" (ngModelChange)="patchForm('invitationSource', $event)" />
+      </label>
+      <label>
+        <span>URL de evidencia</span>
+        <input [ngModel]="form().invitationEvidenceUrl" (ngModelChange)="patchForm('invitationEvidenceUrl', $event)" />
+      </label>
+      <label class="full">
+        <span>Notas</span>
+        <textarea [ngModel]="form().invitationNotes" (ngModelChange)="patchForm('invitationNotes', $event)"></textarea>
+      </label>
+    </div>
+
+    @if (importResult(); as result) {
+      <div class="result">
+        <strong>{{ result.confirmedCount }} confirmados</strong>
+        <span>{{ result.requestedCount }} solicitados</span>
+      </div>
+    }
+  </article>
+
+  <article class="panel">
+    <div class="panel-head">
+      <h2>Sincronizacion publica</h2>
+      <button type="button" (click)="syncPublicInvitations()">{{ syncing() ? 'Sincronizando...' : 'Sincronizar' }}</button>
+    </div>
+
+    <p class="muted">Cruza el reporte publico del SERCOP con la base local y confirma solo invitaciones verificadas.</p>
+
+    @if (syncResult(); as result) {
+      <div class="result-grid">
+        <div><strong>{{ result.scannedCount }}</strong><span>escaneados</span></div>
+        <div><strong>{{ result.confirmedCount }}</strong><span>confirmados</span></div>
+        <div><strong>{{ result.updatedCount }}</strong><span>actualizados</span></div>
+      </div>
+      @if (result.errors.length > 0) {
+        <div class="error-list">
+          @for (error of result.errors; track error) {
+            <span>{{ error }}</span>
+          }
+        </div>
+      }
+    }
+  </article>
+</section>

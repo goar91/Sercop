@@ -1,0 +1,34 @@
+<section class="login-shell">
+  <article class="login-card">
+    <div class="heading">
+      <span class="eyebrow">HDM SERCOP</span>
+      <h1>Workspace comercial y operativo</h1>
+      <p>Accede con tu login o correo para operar procesos, gerencia y automatizaciones.</p>
+    </div>
+
+    <form (ngSubmit)="submit()" class="login-form">
+      <label>
+        <span>Login o correo</span>
+        <input [(ngModel)]="form.identifier" name="identifier" autocomplete="username" required />
+      </label>
+
+      <label>
+        <span>Clave</span>
+        <input [(ngModel)]="form.password" name="password" type="password" autocomplete="current-password" required />
+      </label>
+
+      <label class="checkbox">
+        <input [(ngModel)]="form.rememberMe" name="rememberMe" type="checkbox" />
+        <span>Mantener sesion en este equipo</span>
+      </label>
+
+      @if (errorMessage()) {
+        <div class="error">{{ errorMessage() }}</div>
+      }
+
+      <button type="submit" [disabled]="submitting()">
+        {{ submitting() ? 'Ingresando...' : 'Entrar al CRM' }}
+      </button>
+    </form>
+  </article>
+</section>
