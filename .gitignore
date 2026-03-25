@@ -7,4 +7,9 @@ backups/
 logs/
 tmp/
 *.log
-
+**/bin/
+**/obj/
+**/build-check/
+frontend/dist/
+run/
+.dotnet/
