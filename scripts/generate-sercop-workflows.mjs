@@ -400,9 +400,38 @@ function extractDateKey(value) {
   return normalized ? normalized.slice(0, 10) : '';
 }
 
-function isCurrentDate(...values) {
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: ecuadorTimeZone });
-  return values.some((value) => extractDateKey(value) === today);
+function dateKeyToEpoch(value) {
+  const key = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+    return Number.NaN;
+  }
+
+  return Date.parse(key + 'T00:00:00' + ecuadorOffsetSuffix);
+}
+
+function isWithinRecentWindow(...values) {
+  const configuredDays = Number($env.SERCOP_RECENT_WINDOW_DAYS || $env.POLL_RECENT_DAYS || 3);
+  const recentWindowDays = Number.isFinite(configuredDays)
+    ? Math.max(1, Math.min(14, Math.trunc(configuredDays)))
+    : 3;
+  const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: ecuadorTimeZone });
+  const todayEpoch = dateKeyToEpoch(todayKey);
+  const maxAgeMs = (recentWindowDays - 1) * 24 * 60 * 60 * 1000;
+
+  return values.some((value) => {
+    const dateKey = extractDateKey(value);
+    if (!dateKey) {
+      return false;
+    }
+
+    const valueEpoch = dateKeyToEpoch(dateKey);
+    if (!Number.isFinite(valueEpoch)) {
+      return false;
+    }
+
+    const ageMs = todayEpoch - valueEpoch;
+    return ageMs >= 0 && ageMs <= maxAgeMs;
+  });
 }
 `;
 
@@ -526,7 +555,7 @@ for (let index = 0; index < inputs.length; index++) {
     const publishedAt = String(pick(row, ['date', 'publishedDate', 'releaseDate']) || '').trim();
     const deadlineAt = String(pick(row, ['tender_tenderPeriod_endDate', 'tenderPeriod_endDate', 'deadline']) || '').trim();
 
-    if (!isCurrentDate(publishedAt, deadlineAt)) {
+    if (!isWithinRecentWindow(publishedAt, deadlineAt)) {
       continue;
     }
 
@@ -701,7 +730,7 @@ for (const input of $input.all()) {
   const publishedAt = String(candidate.fecha_publicacion || '').trim();
   const deadlineAt = String(candidate.fecha_limite || '').trim();
 
-  if (!isCurrentDate(publishedAt, deadlineAt)) {
+  if (!isWithinRecentWindow(publishedAt, deadlineAt)) {
     continue;
   }
 
@@ -903,7 +932,7 @@ for (const row of rows) {
   const publishedAt = String(row.fecha_publicacion || '').trim();
   const deadlineAt = String(row.fecha_limite_propuesta || '').trim();
 
-  if (!isCurrentDate(publishedAt, deadlineAt)) {
+  if (!isWithinRecentWindow(publishedAt, deadlineAt)) {
     continue;
   }
 
@@ -1049,7 +1078,7 @@ for (let index = 0; index < inputs.length; index++) {
   const html = String(inputs[index].json?.body || inputs[index].json || '');
   const candidate = $item(index).$node['Normalize NCO List'].json;
 
-  if (!isCurrentDate(candidate.fecha_publicacion, candidate.fecha_limite)) {
+  if (!isWithinRecentWindow(candidate.fecha_publicacion, candidate.fecha_limite)) {
     continue;
   }
 

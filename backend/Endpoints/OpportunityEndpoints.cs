@@ -77,6 +77,51 @@ internal static class OpportunityEndpoints
             return Results.Ok(visibility);
         });
 
+        group.MapPost("/opportunities/import-by-code", async (
+            HttpContext context,
+            ImportOpportunityByCodeRequest request,
+            IConfiguration configuration,
+            CrmRepository repository,
+            SercopPublicClient sercopPublicClient,
+            CancellationToken cancellationToken) =>
+        {
+            var code = request.Code?.Trim();
+            if (string.IsNullOrWhiteSpace(code))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["code"] = ["Debes indicar un codigo de proceso."]
+                });
+            }
+
+            var fallbackYear = int.TryParse(configuration["OCDS_YEAR"], out var configuredYear)
+                ? configuredYear
+                : DateTime.UtcNow.Year;
+            var detail = await repository.ImportOpportunityByCodeAsync(code, sercopPublicClient, fallbackYear, cancellationToken);
+            if (detail is null)
+            {
+                return Results.NotFound(new
+                {
+                    code,
+                    message = "No se encontro el proceso en las fuentes publicas del SERCOP."
+                });
+            }
+
+            var actor = EndpointContext.GetActor(context);
+            await repository.WriteAuditLogAsync(
+                actor?.Id,
+                actor?.LoginName,
+                "opportunity_import_by_code",
+                "opportunity",
+                detail.Id.ToString(),
+                EndpointContext.GetClientIp(context),
+                EndpointContext.GetUserAgent(context),
+                new { code, detail.Source, detail.ProcessCode },
+                cancellationToken);
+
+            return Results.Ok(detail);
+        }).RequireAuthorization(CrmPolicies.CommercialManagers);
+
         group.MapGet("/opportunities/{id:long}", async (HttpContext context, long id, CrmRepository repository, CancellationToken cancellationToken) =>
         {
             var detail = await repository.GetOpportunityAsync(id, EndpointContext.GetActor(context), cancellationToken);

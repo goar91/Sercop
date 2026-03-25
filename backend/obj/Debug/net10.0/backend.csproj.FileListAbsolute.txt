@@ -92,3 +92,4 @@ C:\Automatización\backend.tests\build-check\backend.deps.json
 C:\Automatización\backend.tests\build-check\backend.runtimeconfig.json
 C:\Automatización\backend.tests\build-check\backend.dll
 C:\Automatización\backend.tests\build-check\backend.pdb
+C:\Automatización\backend\bin\Debug\net10.0\backend.exe

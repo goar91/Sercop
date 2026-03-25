@@ -77,7 +77,7 @@
 
   <section class="workspace">
     <aside class="filters-column">
-      <form class="panel filters" ngNoForm (ngSubmit)="reload()">
+      <form class="panel filters" ngNoForm (submit)="$event.preventDefault(); reload()">
         <div class="section-head">
           <div>
             <h2>Filtros operativos</h2>
@@ -142,7 +142,7 @@
         <button type="submit">Aplicar filtros</button>
       </form>
 
-      <form class="panel saved-view-panel" ngNoForm (ngSubmit)="saveCurrentView()">
+      <form class="panel saved-view-panel" ngNoForm (submit)="$event.preventDefault(); saveCurrentView()">
         <div class="section-head">
           <div>
             <h3>Vistas guardadas</h3>
@@ -164,7 +164,7 @@
         </div>
       </form>
 
-      <form class="panel support-check" ngNoForm (ngSubmit)="runVisibilityCheck()">
+      <form class="panel support-check" ngNoForm (submit)="$event.preventDefault(); runVisibilityCheck()">
         <div class="section-head">
           <div>
             <h3>Soporte de visibilidad</h3>
@@ -233,21 +233,38 @@
                 </div>
                 <span class="lane-count">{{ newProcessesLane().length }}</span>
               </header>
-                <div class="lane-scroll">
+              <div class="lane-scroll lane-scroll-current lane-scroll-new">
                 @for (item of newProcessesLane(); track item.id) {
-                  <button type="button" class="opportunity-card new-process-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                  <button type="button" class="opportunity-card opportunity-card-stale new-process-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
                     <div class="card-top">
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
-                      <span class="status-pill new-badge">NUEVO</span>
+                      <div class="card-top-tags">
+                        <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                        <span class="status-pill new-badge">NUEVO</span>
+                      </div>
                     </div>
-                    <span class="card-title">{{ item.titulo }}</span>
-                    <div class="card-meta">
-                      <span>{{ item.entidad || 'Entidad no registrada' }}</span>
-                      <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                    <strong class="card-title card-title-stale" [title]="item.titulo">{{ item.titulo }}</strong>
+                    <div class="card-summary-grid">
+                      <div>
+                        <small>Entidad</small>
+                        <span>{{ item.entidad || 'Entidad no registrada' }}</span>
+                      </div>
+                      <div>
+                        <small>Responsable</small>
+                        <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
+                      </div>
+                      <div>
+                        <small>Publicado</small>
+                        <span>{{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
+                      </div>
+                      <div>
+                        <small>Límite</small>
+                        <span>{{ item.fechaLimite ? (item.fechaLimite | date:'dd/MM/yyyy HH:mm') : 'Sin fecha límite' }}</span>
+                      </div>
                     </div>
                     <div class="card-foot">
                       <span class="status-pill" [attr.data-tone]="slaTone(item.slaStatus)">{{ item.slaStatus }}</span>
-                      <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                      <span class="card-foot-inline">{{ humanizeLabel(item.estado) }}</span>
                     </div>
                   </button>
                 }

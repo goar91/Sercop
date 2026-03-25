@@ -213,6 +213,10 @@ public sealed record OpportunityVisibilityDto(
     IReadOnlyList<string> Reasons
 );
 
+public sealed record ImportOpportunityByCodeRequest(
+    string Code
+);
+
 public sealed record BulkInvitationImportRequest(
     string CodesText,
     string? InvitationSource,

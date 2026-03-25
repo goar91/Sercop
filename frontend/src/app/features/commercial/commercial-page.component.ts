@@ -159,17 +159,17 @@ export class CommercialPageComponent {
   protected readonly visibilityCode = signal('');
 
   protected readonly invitedLane = computed(() => this.opportunities().filter((item) => item.isInvitedMatch));
-  protected readonly newProcessesLane = computed(() => 
+  protected readonly newProcessesLane = computed(() =>
     this.opportunities()
       .filter((item) => !item.isInvitedMatch && this.isPublishedTodayInEcuador(item))
       .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
   );
-  protected readonly currentLane = computed(() => 
+  protected readonly currentLane = computed(() =>
     this.opportunities()
       .filter((item) => !item.isInvitedMatch && !this.isPublishedTodayInEcuador(item) && item.daysOpen <= 1)
       .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
   );
-  protected readonly staleLane = computed(() => 
+  protected readonly staleLane = computed(() =>
     this.opportunities()
       .filter((item) => !item.isInvitedMatch && item.daysOpen > 1)
       .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
@@ -244,6 +244,7 @@ export class CommercialPageComponent {
   }
 
   protected async reload(): Promise<void> {
+    this.page.set(1);
     await this.loadList();
   }
 
