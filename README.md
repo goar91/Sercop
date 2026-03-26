@@ -89,3 +89,13 @@ Solucion local para monitorear procesos del SERCOP, confirmar invitaciones a HDM
 - Importacion de workflows: `docs\workflow-import.md`
 - Operacion sin Google: `docs\no-google-options.md`
 - Arquitectura general: `docs\architecture.md`
+- Despliegue en otro PC: `docs\deploy-on-new-pc.md`
+
+## Migracion a otro PC
+
+- Generar bundle completo:
+  - `powershell -ExecutionPolicy Bypass -File scripts\build-deployment-bundle.ps1`
+- Generar bundle incluyendo payloads historicos de n8n:
+  - `powershell -ExecutionPolicy Bypass -File scripts\build-deployment-bundle.ps1 -IncludeN8nExecutionPayloads`
+- Restaurar respaldo en el equipo nuevo:
+  - `powershell -ExecutionPolicy Bypass -File scripts\restore-local-postgres-backup.ps1 -BackupFile .\database-backup\sercop_crm-AAAAmmdd-HHmmss.dir -AdminUser postgres -AdminPassword TU_CLAVE_POSTGRES`
