@@ -16,6 +16,9 @@ if (-not $files) {
     throw "No se encontraron workflows JSON para importar."
 }
 
+Write-Host "Sincronizando credenciales locales de n8n ..."
+powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts\sync-n8n-credentials.ps1")
+
 Write-Host "Importando workflows desde $workflowDir ..."
 docker compose exec -T n8n n8n import:workflow --separate --input=/import/workflows | Out-Host
 
