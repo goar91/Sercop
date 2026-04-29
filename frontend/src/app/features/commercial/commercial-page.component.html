@@ -242,7 +242,7 @@
               </header>
               <div class="lane-scroll lane-scroll-current lane-scroll-new">
                 @for (item of newProcessesLane(); track item.id) {
-                  <button type="button" class="opportunity-card opportunity-card-stale new-process-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                  <button type="button" class="opportunity-card opportunity-card-stale new-process-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item, true)">
                     <div class="card-top">
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
                       <div class="card-top-tags">
@@ -297,7 +297,7 @@
               </header>
               <div class="lane-scroll lane-scroll-current">
                 @for (item of currentLane(); track item.id) {
-                  <button type="button" class="opportunity-card opportunity-card-stale" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                  <button type="button" class="opportunity-card opportunity-card-stale" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item, true)">
                     <div class="card-top">
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
                       <div class="card-top-tags">
@@ -352,7 +352,7 @@
               </header>
               <div class="lane-scroll lane-scroll-stale">
                 @for (item of staleLane(); track item.id) {
-                  <button type="button" class="opportunity-card opportunity-card-stale" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                  <button type="button" class="opportunity-card opportunity-card-stale" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item, true)">
                     <div class="card-top">
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
                       <div class="card-top-tags">
@@ -409,7 +409,7 @@
                 </header>
                 <div class="lane-scroll">
                   @for (item of group.items; track item.id) {
-                    <button type="button" class="opportunity-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
+                    <button type="button" class="opportunity-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item, true)">
                       <div class="card-top">
                         <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
                         <div class="card-top-tags">
@@ -441,7 +441,7 @@
       </section>
     </section>
 
-    <aside class="detail panel">
+    <aside #detailPanel class="detail panel">
       @if (detailLoading()) {
         <div class="detail-loading">Cargando detalle...</div>
       } @else if (selectedOpportunity(); as detail) {

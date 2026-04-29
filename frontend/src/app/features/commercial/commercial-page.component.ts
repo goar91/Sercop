@@ -1,6 +1,6 @@
 import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -54,6 +54,8 @@ type CommercialFilters = {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CommercialPageComponent {
+  @ViewChild('detailPanel') private detailPanel?: ElementRef<HTMLElement>;
+
   private readonly api = inject(CrmApiService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
@@ -380,7 +382,11 @@ export class CommercialPageComponent {
     await this.loadList();
   }
 
-  protected async selectOpportunity(item: OpportunityListItem): Promise<void> {
+  protected async selectOpportunity(item: OpportunityListItem, openSercop = false): Promise<void> {
+    if (openSercop) {
+      this.openProcess(item.url);
+    }
+
     this.detailLoading.set(true);
     try {
       const [detail, activities] = await Promise.all([
@@ -407,6 +413,10 @@ export class CommercialPageComponent {
         invitationEvidenceUrl: detail.invitationEvidenceUrl ?? '',
         invitationNotes: detail.invitationNotes ?? '',
       });
+
+      if (openSercop) {
+        this.scrollDetailIntoView();
+      }
     } finally {
       this.detailLoading.set(false);
     }
@@ -607,6 +617,12 @@ export class CommercialPageComponent {
     }
 
     window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  private scrollDetailIntoView(): void {
+    requestAnimationFrame(() => {
+      this.detailPanel?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   protected humanizeLabel(value: string | null | undefined): string {

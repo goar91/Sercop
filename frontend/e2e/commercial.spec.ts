@@ -46,3 +46,19 @@ test('módulo comercial todos muestra filtros avanzados', async ({ page }) => {
   await expect(page.getByText(/proceso/i).first()).toBeVisible();
   await expect(page.getByText(/solo invitados hdm/i).first()).toBeVisible();
 });
+
+test('clic en proceso abre detalle CRM y ficha SERCOP', async ({ page }) => {
+  await login(page);
+
+  const card = page.locator('.opportunity-card').first();
+  await expect(card).toBeVisible();
+
+  const [popup] = await Promise.all([
+    page.waitForEvent('popup'),
+    card.click(),
+  ]);
+
+  await expect(page.getByRole('button', { name: /abrir ficha sercop/i })).toBeVisible();
+  await expect(popup).toHaveURL(/compraspublicas\.gob\.ec/i);
+  await popup.close();
+});
