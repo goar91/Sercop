@@ -64,6 +64,26 @@ $visibilityGraceMinutes = [Math]::Max($visibilitySloMinutes, [Math]::Min(240, $v
 
 $psql = Find-PostgresExecutable -Name 'psql.exe'
 
+function Resolve-DotnetExecutable {
+    $command = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles} 'dotnet\dotnet.exe'),
+        (Join-Path $env:USERPROFILE '.dotnet\dotnet.exe')
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    throw 'No se encontro dotnet en PATH, C:\Program Files\dotnet\dotnet.exe ni en el perfil del usuario.'
+}
+
 function Invoke-Sql {
     param([Parameter(Mandatory)][string]$Query)
 
@@ -422,7 +442,8 @@ if ($PortalAudit) {
 if ($RunTests) {
     Write-Host ''
     Write-Host '== dotnet test (backend.tests) =='
-    dotnet test (Join-Path $root 'backend.tests\backend.tests.csproj')
+    $dotnet = Resolve-DotnetExecutable
+    & $dotnet test (Join-Path $root 'backend.tests\backend.tests.csproj')
 }
 
 if ($RunSmokeTest) {
