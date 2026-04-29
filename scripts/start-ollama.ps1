@@ -55,10 +55,34 @@ elseif ($config.ContainsKey('OLLAMA_CODE_MODEL') -and -not [string]::IsNullOrWhi
     $config['OLLAMA_CODE_MODEL'].Trim()
 }
 else {
-    'qwen2.5-coder:3b'
+    'qwen3:0.6b'
+}
+
+$contextLength = if ($config.ContainsKey('OLLAMA_CONTEXT_LENGTH') -and -not [string]::IsNullOrWhiteSpace($config['OLLAMA_CONTEXT_LENGTH'])) {
+    $config['OLLAMA_CONTEXT_LENGTH'].Trim()
+}
+else {
+    '4096'
+}
+
+$numParallel = if ($config.ContainsKey('OLLAMA_NUM_PARALLEL') -and -not [string]::IsNullOrWhiteSpace($config['OLLAMA_NUM_PARALLEL'])) {
+    $config['OLLAMA_NUM_PARALLEL'].Trim()
+}
+else {
+    '1'
+}
+
+$maxLoadedModels = if ($config.ContainsKey('OLLAMA_MAX_LOADED_MODELS') -and -not [string]::IsNullOrWhiteSpace($config['OLLAMA_MAX_LOADED_MODELS'])) {
+    $config['OLLAMA_MAX_LOADED_MODELS'].Trim()
+}
+else {
+    '1'
 }
 
 $ollama = Resolve-CommandPath -Name 'ollama'
+$env:OLLAMA_CONTEXT_LENGTH = $contextLength
+$env:OLLAMA_NUM_PARALLEL = $numParallel
+$env:OLLAMA_MAX_LOADED_MODELS = $maxLoadedModels
 
 try {
     Invoke-RestMethod -Uri "$baseUrl/api/version" -TimeoutSec 5 | Out-Null
@@ -88,6 +112,7 @@ Push-Location $root
 try {
     Write-Host "Ollama directo: $baseUrl"
     Write-Host "Modelo: $resolvedModel"
+    Write-Host "Contexto solicitado: $contextLength tokens"
     Write-Host ''
 
     if ([string]::IsNullOrWhiteSpace($Prompt)) {
