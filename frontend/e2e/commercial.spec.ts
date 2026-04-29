@@ -9,11 +9,16 @@ async function login(page: import('@playwright/test').Page) {
   }
 
   await page.goto('/login');
-  if (!/\/login(?:\?|$)/i.test(page.url())) {
+  const loginForm = page.locator('input[formcontrolname="identifier"]');
+  const destination = page.waitForURL(/\/commercial\/quimica$/, { timeout: 5000 }).then(() => 'authenticated' as const).catch(() => null);
+  const formReady = loginForm.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'login' as const).catch(() => null);
+  const state = await Promise.race([destination, formReady]);
+
+  if (state === 'authenticated' || !/\/login(?:\?|$)/i.test(page.url())) {
     return;
   }
 
-  await page.locator('input[formcontrolname="identifier"]').fill(loginName);
+  await loginForm.fill(loginName);
   await page.locator('input[formcontrolname="password"]').fill(password);
   await page.getByRole('button', { name: /entrar al crm/i }).click();
   await page.waitForURL(/\/commercial\/quimica$/);

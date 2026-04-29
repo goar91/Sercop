@@ -311,7 +311,7 @@ if (@($workflows.items).Count -gt 0) {
 }
 
 Write-Host 'Asegurando acceso de importaciones para CRUD de keywords...'
-$importUser = @($users.items | Where-Object { $_.loginName -eq 'importaciones' } | Select-Object -First 1)
+$importUser = $users.items | Where-Object { $_.loginName -eq 'importaciones' } | Select-Object -First 1
 $importPayload = @{
     loginName = 'importaciones'
     fullName = 'Importaciones'

@@ -443,7 +443,7 @@ if ($RunTests) {
     Write-Host ''
     Write-Host '== dotnet test (backend.tests) =='
     $dotnet = Resolve-DotnetExecutable
-    & $dotnet test (Join-Path $root 'backend.tests\backend.tests.csproj')
+    & $dotnet test (Join-Path $root 'backend.tests\backend.tests.csproj') --no-build
 }
 
 if ($RunSmokeTest) {
