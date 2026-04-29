@@ -2,6 +2,42 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Ollama directo",
+      "type": "shell",
+      "command": "${workspaceFolder}\\iniciar-ollama.cmd",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Ollama directo - prueba rapida",
+      "type": "shell",
+      "command": "${workspaceFolder}\\iniciar-ollama.cmd",
+      "args": [
+        "-Model",
+        "qwen3:0.6b",
+        "-Prompt",
+        "Responde exactamente OK"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Claude Code con Ollama",
       "type": "shell",
       "command": "${workspaceFolder}\\iniciar-claude-ollama.cmd",
