@@ -68,7 +68,7 @@ try {
 
     Invoke-Psql 'postgres' "GRANT ALL PRIVILEGES ON DATABASE $appDb TO $appUser;"
 
-    foreach ($scriptName in @('001_schema.sql', '002_invitation_filter.sql', '004_url_fix.sql', '003_crm.sql', '005_permissions.sql', '006_performance_indexes.sql', '007_keyword_rules_management.sql', '008_invitation_tracking.sql', '009_supply_filter_rules.sql', '010_exclude_medical_rules.sql', '011_data_integrity.sql', '012_modernization_foundation.sql')) {
+    foreach ($scriptName in @('001_schema.sql', '002_invitation_filter.sql', '004_url_fix.sql', '003_crm.sql', '005_permissions.sql', '006_performance_indexes.sql', '007_keyword_rules_management.sql', '008_invitation_tracking.sql', '009_supply_filter_rules.sql', '010_exclude_medical_rules.sql', '011_data_integrity.sql', '012_modernization_foundation.sql', '013_keyword_refresh_and_search.sql', '014_keyword_only_and_sercop_credentials.sql', '015_sercop_credential_hardening.sql', '016_opportunity_classification.sql', '017_chemistry_classification_refinement.sql', '018_chemistry_classification_refinement_food_petro.sql')) {
         $scriptPath = Join-Path $root "database\init\$scriptName"
         if (-not (Test-Path $scriptPath)) {
             throw "No se encontro el script $scriptPath"

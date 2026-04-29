@@ -5,11 +5,12 @@
 }
 
 .panel {
-  border-radius: 1.25rem;
-  border: 1px solid rgba(8, 49, 66, 0.08);
-  background: rgba(255, 252, 246, 0.92);
+  border-radius: 1rem;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-panel-strong);
   padding: 1rem;
-  box-shadow: 0 16px 28px rgba(8, 49, 66, 0.06);
+  box-shadow: var(--crm-shadow);
+  overflow: hidden;
 }
 
 .panel-head {
@@ -22,7 +23,7 @@
 
 .panel-head h2 {
   margin: 0;
-  color: #173644;
+  color: var(--crm-text);
   font-size: 1.05rem;
 }
 
@@ -42,14 +43,13 @@ label {
 }
 
 label span {
-  color: #173644;
+  color: var(--crm-text);
   font-size: 0.88rem;
   font-weight: 700;
 }
 
 input,
-textarea,
-button {
+textarea {
   border-radius: 0.95rem;
   font: inherit;
 }
@@ -57,9 +57,10 @@ button {
 input,
 textarea {
   min-height: 48px;
-  border: 1px solid rgba(18, 63, 95, 0.16);
+  border: 1px solid var(--crm-control-border);
   padding: 0.75rem 0.9rem;
-  background: white;
+  background: var(--crm-control-bg);
+  color: var(--crm-text);
 }
 
 textarea {
@@ -67,18 +68,18 @@ textarea {
   resize: vertical;
 }
 
-button {
+button:not(.mat-mdc-button-base) {
   min-height: 48px;
   border: 0;
-  background: linear-gradient(135deg, #0b6a5f, #123f5f);
+  background: var(--crm-accent-deep);
   padding: 0.8rem 1rem;
-  color: white;
+  color: var(--crm-panel-strong);
   font-weight: 700;
   cursor: pointer;
 }
 
 .muted {
-  color: #5f6e73;
+  color: var(--crm-text-soft);
 }
 
 .result,
@@ -94,7 +95,7 @@ button {
   gap: 0.2rem;
   min-width: 120px;
   border-radius: 1rem;
-  background: rgba(18, 63, 95, 0.06);
+  background: var(--crm-fill);
   padding: 0.85rem 1rem;
 }
 
@@ -102,7 +103,7 @@ button {
   display: grid;
   gap: 0.4rem;
   margin-top: 1rem;
-  color: #9c3030;
+  color: var(--crm-danger-text);
 }
 
 @media (max-width: 860px) {

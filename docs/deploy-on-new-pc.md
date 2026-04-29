@@ -45,8 +45,8 @@ Instala esto antes de restaurar el sistema:
    - `POSTGRES_PASSWORD`
    - `CRM_AUTH_BOOTSTRAP_PASSWORD`
    - `N8N_BASIC_AUTH_PASSWORD`
-   - `CRM_EXTERNAL_ACCESS_MODE`
-   - `NGROK_AUTHTOKEN` si vas a usar `ngrok`
+   - `NGROK_AUTHTOKEN`
+   - `CRM_DATA_PROTECTION_KEYS_DIR`
 3. Si cambias el host o el puerto local de PostgreSQL, ajusta:
    - `CRM_DB_HOST`
    - `CRM_DB_PORT`
@@ -92,16 +92,9 @@ Si alguna vez necesitas copiar tambien el historial completo de payloads de n8n,
 powershell -ExecutionPolicy Bypass -File scripts\build-deployment-bundle.ps1 -IncludeN8nExecutionPayloads
 ```
 
-## 7. Preparar Docker y modelos
+## 7. Preparar Docker
 
 1. Abre Docker Desktop y espera a que quede operativo.
-2. Desde la carpeta `package`, ejecuta:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\pull-models.ps1
-```
-
-Esto descarga los modelos configurados en `.env` para Ollama.
 
 ## 8. Compilar el CRM
 
@@ -152,14 +145,23 @@ Las principales son:
 - `N8N_BASIC_AUTH_USER`
 - `N8N_BASIC_AUTH_PASSWORD`
 
+La cuenta compartida del portal SERCOP no viaja en `.env` ni en el bundle. Debes volver a sembrarla en el PC nuevo con:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\set-sercop-credentials.ps1 -SercopRuc TU_RUC -SercopUserName TU_USUARIO
+```
+
+La clave se pedira de forma interactiva y quedara cifrada con el key ring local de ASP.NET Data Protection.
+
 ## 12. Acceso externo desde celular
 
 Si quieres publicar el CRM desde el PC nuevo:
 
-1. deja `CRM_EXTERNAL_ACCESS_MODE=cloudflare_quick` para una URL temporal
-2. o configura `NGROK_AUTHTOKEN` si vas a usar `ngrok`
-3. inicia el sistema con `iniciar-automatizacion.cmd`
-4. revisa la URL publica en `run\crm-external-url.txt`
+1. configura `NGROK_AUTHTOKEN` en tu `.env` local
+2. opcional: configura `NGROK_API_KEY` y `NGROK_FORCE_STOP_EXISTING_SESSIONS=true` si quieres que el arranque cierre sesiones activas de `ngrok` de esa cuenta
+3. si tienes un dominio reservado, configura `CRM_NGROK_DOMAIN`
+4. inicia el sistema con `iniciar-automatizacion.cmd`
+5. revisa la URL publica en `run\crm-external-url.txt`
 
 ## 13. Cuando conviene usar restauracion completa
 

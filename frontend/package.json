@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "test:headless": "ng test --watch=false --browsers=ChromeHeadlessCI --progress=false"
+    "test:headless": "ng test --watch=false --browsers=ChromeHeadlessCI --progress=false",
+    "test:e2e": "playwright test --config=playwright.config.mjs"
   },
   "prettier": {
     "printWidth": 100,
@@ -23,10 +24,13 @@
   },
   "private": true,
   "dependencies": {
+    "@angular/animations": "^20.3.0",
+    "@angular/cdk": "^20.0.0",
     "@angular/common": "^20.3.0",
     "@angular/compiler": "^20.3.0",
     "@angular/core": "^20.3.0",
     "@angular/forms": "^20.3.0",
+    "@angular/material": "^20.0.0",
     "@angular/platform-browser": "^20.3.0",
     "@angular/router": "^20.3.0",
     "rxjs": "~7.8.0",
@@ -37,6 +41,7 @@
     "@angular/build": "^20.3.20",
     "@angular/cli": "^20.3.20",
     "@angular/compiler-cli": "^20.3.0",
+    "@playwright/test": "^1.54.2",
     "@types/jasmine": "~5.1.0",
     "jasmine-core": "~5.9.0",
     "karma": "~6.4.0",

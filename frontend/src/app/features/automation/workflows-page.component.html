@@ -1,49 +1,75 @@
-<section class="page">
-  <header class="page-head">
+<mat-toolbar class="page-toolbar">
+  <div class="toolbar-content">
     <div>
-      <span class="eyebrow">Automatizacion</span>
+      <span class="eyebrow">Automatización</span>
       <h1>Workflows n8n cargados</h1>
       <p>Consulta visual resumida de los flujos activos e importados en la base de n8n.</p>
     </div>
     <div class="stats">
-      <strong>{{ activeCount() }}</strong>
+      <strong class="active-count">{{ activeCount() }}</strong>
       <span>activos</span>
     </div>
-  </header>
+  </div>
+</mat-toolbar>
 
+<section class="page">
   @if (loading()) {
-    <div class="panel">Cargando workflows...</div>
+    <div class="loading-container">
+      <mat-spinner diameter="48"></mat-spinner>
+      <p>Cargando workflows...</p>
+    </div>
   } @else {
     <section class="grid">
-      <article class="panel">
-        <div class="list">
+      <mat-card class="panel list-panel">
+        <mat-card-header>
+          <h2 mat-card-title>Flujos disponibles</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content class="list">
           @for (workflow of workflows(); track workflow.id) {
-            <button type="button" class="workflow-card" (click)="selectWorkflow(workflow)">
-              <strong>{{ workflow.name }}</strong>
-              <span>{{ workflow.nodeCount }} nodos · {{ workflow.active ? 'activo' : 'inactivo' }}</span>
+            <button mat-list-item (click)="selectWorkflow(workflow)" class="workflow-card">
+              <mat-icon matListItemIcon>{{ workflow.active ? 'check_circle' : 'radio_button_unchecked' }}</mat-icon>
+              <div matListItemTitle>{{ workflow.name }}</div>
+              <div matListItemLine>{{ workflow.nodeCount }} nodos · {{ workflow.active ? 'activo' : 'inactivo' }}</div>
             </button>
           }
-        </div>
-        <div class="pager">
-          <button type="button" class="ghost" (click)="changePage(-1)">Anterior</button>
-          <span>Pagina {{ page() }} · {{ workflowTotal() }} workflows</span>
-          <button type="button" class="ghost" (click)="changePage(1)">Siguiente</button>
-        </div>
-      </article>
+        </mat-card-content>
+        <mat-divider></mat-divider>
+        <mat-card-footer class="pager">
+          <button mat-icon-button (click)="changePage(-1)" [disabled]="page() === 1">
+            <mat-icon>chevron_left</mat-icon>
+          </button>
+          <span class="pager-text">Página {{ page() }} · {{ workflowTotal() }} workflows</span>
+          <button mat-icon-button (click)="changePage(1)">
+            <mat-icon>chevron_right</mat-icon>
+          </button>
+        </mat-card-footer>
+      </mat-card>
 
-      <article class="panel">
+      <mat-card class="panel detail-panel">
         @if (selectedWorkflow(); as workflow) {
-          <h2>{{ workflow.name }}</h2>
-          <p class="muted">{{ workflow.description || 'Sin descripcion' }}</p>
-          <div class="chip-row">
-            <span class="chip">{{ workflow.active ? 'Activo' : 'Inactivo' }}</span>
-            <span class="chip">{{ workflow.nodeCount }} nodos</span>
-          </div>
-          <pre>{{ workflow.connectionsJson }}</pre>
+          <mat-card-header>
+            <h2 mat-card-title>{{ workflow.name }}</h2>
+          </mat-card-header>
+          <mat-divider></mat-divider>
+          <mat-card-content>
+            <p class="muted">{{ workflow.description || 'Sin descripción' }}</p>
+            <div class="chip-row">
+              <span class="chip">{{ workflow.active ? 'Activo' : 'Inactivo' }}</span>
+              <span class="chip">{{ workflow.nodeCount }} nodos</span>
+            </div>
+          </mat-card-content>
+          <mat-divider></mat-divider>
+          <mat-card-footer>
+            <pre class="connections-json">{{ workflow.connectionsJson }}</pre>
+          </mat-card-footer>
         } @else {
-          <div class="empty">Selecciona un workflow para ver su detalle.</div>
+          <div class="empty-state">
+            <mat-icon>info</mat-icon>
+            <p>Selecciona un workflow para ver su detalle.</p>
+          </div>
         }
-      </article>
+      </mat-card>
     </section>
   }
 </section>

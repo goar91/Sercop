@@ -8,6 +8,7 @@ import {
   DashboardSummary,
   InvitationSyncResult,
   KeywordRule,
+  KeywordRefreshRun,
   KeywordRuleUpsertRequest,
   LoginRequest,
   LoginResponse,
@@ -25,6 +26,9 @@ import {
   PagedResult,
   SavedView,
   SavedViewUpsertRequest,
+  SercopCredentialStatus,
+  SercopOperationalStatus,
+  SercopCredentialsUpsertRequest,
   User,
   UserUpsertRequest,
   WorkflowDetail,
@@ -36,7 +40,7 @@ import {
 @Injectable({ providedIn: 'root' })
 export class CrmApiService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api';
+  private readonly baseUrl = 'api';
 
   login(payload: LoginRequest) {
     return this.http.post<LoginResponse>(`${this.baseUrl}/auth/login`, payload);
@@ -82,11 +86,16 @@ export class CrmApiService {
 
   getOpportunities(filters: {
     search?: string;
+    entity?: string;
+    processCode?: string;
+    keyword?: string;
     estado?: string;
     zoneId?: number | null;
     assignedUserId?: number | null;
+    processCategory?: 'all' | 'infimas' | 'nco' | 'sie' | 're' | 'other_public';
     invitedOnly?: boolean;
     todayOnly?: boolean;
+    chemistryOnly?: boolean;
     page?: number;
     pageSize?: number;
   }) {
@@ -96,6 +105,18 @@ export class CrmApiService {
       params = params.set('search', filters.search);
     }
 
+    if (filters.entity) {
+      params = params.set('entity', filters.entity);
+    }
+
+    if (filters.processCode) {
+      params = params.set('processCode', filters.processCode);
+    }
+
+    if (filters.keyword) {
+      params = params.set('keyword', filters.keyword);
+    }
+
     if (filters.estado) {
       params = params.set('estado', filters.estado);
     }
@@ -108,8 +129,15 @@ export class CrmApiService {
       params = params.set('assignedUserId', filters.assignedUserId);
     }
 
+    if (filters.processCategory) {
+      params = params.set('processCategory', filters.processCategory);
+    }
+
     params = params.set('invitedOnly', filters.invitedOnly ?? false);
     params = params.set('todayOnly', filters.todayOnly ?? false);
+    if (filters.chemistryOnly !== undefined) {
+      params = params.set('chemistryOnly', filters.chemistryOnly);
+    }
     params = params.set('page', filters.page ?? 1);
     params = params.set('pageSize', filters.pageSize ?? 25);
 
@@ -119,16 +147,33 @@ export class CrmApiService {
   exportOpportunitiesUrl(filters: {
     format: 'csv' | 'excel';
     search?: string;
+    entity?: string;
+    processCode?: string;
+    keyword?: string;
     estado?: string;
     zoneId?: number | null;
     assignedUserId?: number | null;
+    processCategory?: 'all' | 'infimas' | 'nco' | 'sie' | 're' | 'other_public';
     invitedOnly?: boolean;
     todayOnly?: boolean;
+    chemistryOnly?: boolean;
   }) {
     let params = new HttpParams().set('format', filters.format);
 
     if (filters.search) {
       params = params.set('search', filters.search);
+    }
+
+    if (filters.entity) {
+      params = params.set('entity', filters.entity);
+    }
+
+    if (filters.processCode) {
+      params = params.set('processCode', filters.processCode);
+    }
+
+    if (filters.keyword) {
+      params = params.set('keyword', filters.keyword);
     }
 
     if (filters.estado) {
@@ -143,8 +188,15 @@ export class CrmApiService {
       params = params.set('assignedUserId', filters.assignedUserId);
     }
 
+    if (filters.processCategory) {
+      params = params.set('processCategory', filters.processCategory);
+    }
+
     params = params.set('invitedOnly', filters.invitedOnly ?? false);
     params = params.set('todayOnly', filters.todayOnly ?? false);
+    if (filters.chemistryOnly !== undefined) {
+      params = params.set('chemistryOnly', filters.chemistryOnly);
+    }
     return `${this.baseUrl}/opportunities/export?${params.toString()}`;
   }
 
@@ -176,6 +228,10 @@ export class CrmApiService {
   getOpportunityVisibility(code: string, todayOnly = false) {
     const params = new HttpParams().set('code', code).set('todayOnly', todayOnly);
     return this.http.get<OpportunityVisibility>(`${this.baseUrl}/opportunities/visibility`, { params });
+  }
+
+  importOpportunityByCode(code: string) {
+    return this.http.post<OpportunityDetail>(`${this.baseUrl}/opportunities/import-by-code`, { code });
   }
 
   importInvitations(payload: BulkInvitationImportRequest) {
@@ -230,6 +286,14 @@ export class CrmApiService {
     return this.http.get<PagedResult<KeywordRule>>(`${this.baseUrl}/keywords`, { params });
   }
 
+  getKeywordRefreshStatus() {
+    return this.http.get<KeywordRefreshRun | null>(`${this.baseUrl}/keywords/refresh-status`);
+  }
+
+  triggerKeywordRefresh() {
+    return this.http.post<KeywordRefreshRun>(`${this.baseUrl}/keywords/refresh`, {});
+  }
+
   createKeywordRule(payload: KeywordRuleUpsertRequest) {
     return this.http.post<KeywordRule>(`${this.baseUrl}/keywords`, payload);
   }
@@ -240,6 +304,26 @@ export class CrmApiService {
 
   deleteKeywordRule(id: number) {
     return this.http.delete<void>(`${this.baseUrl}/keywords/${id}`);
+  }
+
+  getSercopCredentialStatus() {
+    return this.http.get<SercopCredentialStatus>(`${this.baseUrl}/sercop/credentials`);
+  }
+
+  getSercopOperationalStatus() {
+    return this.http.get<SercopOperationalStatus>(`${this.baseUrl}/sercop/status`);
+  }
+
+  upsertSercopCredentials(payload: SercopCredentialsUpsertRequest) {
+    return this.http.put<SercopCredentialStatus>(`${this.baseUrl}/sercop/credentials`, payload);
+  }
+
+  testSercopCredentials() {
+    return this.http.post<SercopCredentialStatus>(`${this.baseUrl}/sercop/credentials/test`, {});
+  }
+
+  clearSercopCredentials() {
+    return this.http.delete<void>(`${this.baseUrl}/sercop/credentials`);
   }
 
   getWorkflows(page = 1, pageSize = 25) {

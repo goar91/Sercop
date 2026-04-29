@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard, roleGuard } from './core/auth.guard';
+import { authGuard, commercialAllGuard, guestGuard, roleGuard } from './core/auth.guard';
 
 export const routes: Routes = [
   {
@@ -15,7 +15,7 @@ export const routes: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        redirectTo: 'commercial',
+        redirectTo: 'commercial/quimica',
       },
       {
         path: 'dashboard',
@@ -23,7 +23,19 @@ export const routes: Routes = [
       },
       {
         path: 'commercial',
+        pathMatch: 'full',
+        redirectTo: 'commercial/quimica',
+      },
+      {
+        path: 'commercial/quimica',
         loadComponent: () => import('./features/commercial/commercial-page.component').then((m) => m.CommercialPageComponent),
+        data: { scope: 'chemistry' },
+      },
+      {
+        path: 'commercial/todos',
+        canActivate: [commercialAllGuard],
+        loadComponent: () => import('./features/commercial/commercial-page.component').then((m) => m.CommercialPageComponent),
+        data: { scope: 'all' },
       },
       {
         path: 'management',
@@ -32,24 +44,22 @@ export const routes: Routes = [
       },
       {
         path: 'operations',
-        canActivate: [roleGuard('admin')],
+        canActivate: [roleGuard('admin', 'coordinator')],
         loadComponent: () => import('./features/operations/operations-layout.component').then((m) => m.OperationsLayoutComponent),
         children: [
           {
-            path: '',
-            pathMatch: 'full',
-            redirectTo: 'users-zones',
-          },
-          {
             path: 'users-zones',
+            canActivate: [roleGuard('admin')],
             loadComponent: () => import('./features/operations/users-zones-page.component').then((m) => m.UsersZonesPageComponent),
           },
           {
             path: 'invitations',
+            canActivate: [roleGuard('admin')],
             loadComponent: () => import('./features/operations/invitations-page.component').then((m) => m.InvitationsPageComponent),
           },
           {
             path: 'keywords',
+            canActivate: [roleGuard('admin', 'coordinator')],
             loadComponent: () => import('./features/operations/keywords-page.component').then((m) => m.KeywordsPageComponent),
           },
         ],

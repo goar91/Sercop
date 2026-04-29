@@ -1,8 +1,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
+let playwrightExecutablePath = null;
+
+try {
+  const { chromium } = require('playwright');
+  playwrightExecutablePath = chromium.executablePath();
+} catch {
+  playwrightExecutablePath = null;
+}
 
 const browserCandidates = [
   process.env.CHROME_BIN,
+  playwrightExecutablePath,
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
@@ -20,6 +29,7 @@ if (detectedBrowser) {
 }
 
 module.exports = function configure(config) {
+  const singleRun = process.env.KARMA_WATCH !== 'true';
   config.set({
     basePath: '',
     frameworks: ['jasmine'],
@@ -48,12 +58,14 @@ module.exports = function configure(config) {
     customLaunchers: {
       ChromeHeadlessCI: {
         base: 'ChromeHeadless',
-        flags: ['--disable-gpu', '--disable-dev-shm-usage'],
+        flags: ['--disable-gpu', '--disable-dev-shm-usage', '--no-sandbox'],
       },
     },
+    autoWatch: !singleRun,
+    singleRun,
     browserDisconnectTolerance: 2,
     processKillTimeout: 10000,
     browserNoActivityTimeout: 120000,
-    restartOnFileChange: true,
+    restartOnFileChange: !singleRun,
   });
 };

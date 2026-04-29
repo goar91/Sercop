@@ -2,7 +2,9 @@
   <article class="panel">
     <div class="panel-head">
       <h2>Importacion manual de invitaciones</h2>
-      <button type="button" (click)="importCodes()">{{ importing() ? 'Importando...' : 'Importar codigos' }}</button>
+      <button mat-flat-button color="primary" type="button" [disabled]="importing()" (click)="importCodes()">
+        {{ importing() ? 'Importando...' : 'Importar codigos' }}
+      </button>
     </div>
 
     <div class="form-grid">
@@ -35,7 +37,9 @@
   <article class="panel">
     <div class="panel-head">
       <h2>Sincronizacion publica</h2>
-      <button type="button" (click)="syncPublicInvitations()">{{ syncing() ? 'Sincronizando...' : 'Sincronizar' }}</button>
+      <button mat-flat-button color="primary" type="button" [disabled]="syncing()" (click)="syncPublicInvitations()">
+        {{ syncing() ? 'Sincronizando...' : 'Sincronizar' }}
+      </button>
     </div>
 
     <p class="muted">Cruza el reporte publico del SERCOP con la base local y confirma solo invitaciones verificadas.</p>

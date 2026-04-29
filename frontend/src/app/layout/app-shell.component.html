@@ -1,79 +1,227 @@
-<div class="shell">
-  <aside class="sidebar">
-    <div class="brand-block">
-      <div class="brand">
-        <div class="brand-mark">HDM</div>
-        <div>
-          <strong>CRM SERCOP</strong>
-          <p>Operacion, gerencia y automatizacion</p>
+<mat-sidenav-container class="sidenav-container">
+  <!-- Sidenav -->
+  <mat-sidenav
+    #sidenav
+    class="sidenav"
+    [opened]="sidenavOpen()"
+    mode="side"
+    [fixedInViewport]="true"
+    [fixedTopGap]="64"
+  >
+    <!-- Sidenav Header -->
+    <div class="sidenav-header">
+      <div class="brand-logo">
+        <mat-icon>security</mat-icon>
+        <div class="brand-text">
+          <strong>Automatización</strong>
+          <span>SERCOP CRM</span>
         </div>
       </div>
-      <p class="brand-note">Una consola unica para priorizar procesos, asignar responsables y controlar resultados sin mezclar operacion con seguimiento comercial.</p>
     </div>
 
-    <section class="nav-group">
-      <span class="sidebar-label">Trabajo diario</span>
-      <nav class="nav">
-        <a routerLink="/commercial" routerLinkActive="active">
-          <span>Comercial</span>
-          <small>Workspace principal</small>
-        </a>
-        <a routerLink="/dashboard" routerLinkActive="active">
-          <span>Dashboard</span>
-          <small>Resumen diario</small>
-        </a>
-      </nav>
-    </section>
+    <mat-divider></mat-divider>
 
-    <section class="nav-group">
-      <span class="sidebar-label">Control y soporte</span>
-      <nav class="nav">
-        @if (showManagement()) {
-          <a routerLink="/management" routerLinkActive="active">
-            <span>Gerencia</span>
-            <small>KPI, alertas y tendencias</small>
-          </a>
-        }
-        @if (showOperations()) {
-          <a routerLink="/operations/users-zones" routerLinkActive="active">
-            <span>Operacion</span>
-            <small>Usuarios, zonas y reglas</small>
-          </a>
-        }
-        @if (showAutomation()) {
-          <a routerLink="/automation" routerLinkActive="active">
-            <span>Automatizacion</span>
-            <small>Workflows n8n</small>
-          </a>
-        }
-      </nav>
-    </section>
+    <!-- Sidenav Navigation -->
+    <mat-nav-list>
+      <!-- Daily Work Section -->
+      <p matSubheader class="nav-section-header">Trabajo Diario</p>
 
-    <section class="sidebar-card">
-      <span class="eyebrow">Sesion activa</span>
-      @if (user(); as currentUser) {
-        <strong>{{ currentUser.fullName }}</strong>
-        <p>{{ currentUser.role }} · {{ currentUser.email }}</p>
-        <div class="chip-row">
-          <span class="chip role-chip">{{ currentUser.role }}</span>
+      <mat-list-item routerLink="/commercial/quimica" routerLinkActive="active" (click)="closeSidenav()">
+        <mat-icon matListItemIcon>science</mat-icon>
+        <span matListItemTitle>Comercial (Química)</span>
+        <span matListItemLine class="subtitle">Procesos químicos</span>
+      </mat-list-item>
+
+      @if (showCommercialAll()) {
+        <mat-list-item routerLink="/commercial/todos" routerLinkActive="active" (click)="closeSidenav()">
+          <mat-icon matListItemIcon>list_alt</mat-icon>
+          <span matListItemTitle>Comercial (Todos)</span>
+          <span matListItemLine class="subtitle">Búsqueda completa</span>
+        </mat-list-item>
+      }
+
+      <mat-list-item routerLink="/dashboard" routerLinkActive="active" (click)="closeSidenav()">
+        <mat-icon matListItemIcon>dashboard</mat-icon>
+        <span matListItemTitle>Dashboard</span>
+        <span matListItemLine class="subtitle">Resumen diario</span>
+      </mat-list-item>
+
+      <!-- Control & Support Section -->
+      <p matSubheader class="nav-section-header">Control y Soporte</p>
+
+      @if (showManagement()) {
+        <mat-list-item routerLink="/management" routerLinkActive="active" (click)="closeSidenav()">
+          <mat-icon matListItemIcon>trending_up</mat-icon>
+          <span matListItemTitle>Gerencia</span>
+          <span matListItemLine class="subtitle">KPI y reportes</span>
+        </mat-list-item>
+      }
+
+      @if (showOperations()) {
+        <mat-list-item [routerLink]="operationsLink()" routerLinkActive="active" (click)="closeSidenav()">
+          <mat-icon matListItemIcon>tune</mat-icon>
+          <span matListItemTitle>{{ operationsTitle() }}</span>
+          <span matListItemLine class="subtitle">Configuración</span>
+        </mat-list-item>
+      }
+
+      @if (showAutomation()) {
+        <mat-list-item routerLink="/automation" routerLinkActive="active" (click)="closeSidenav()">
+          <mat-icon matListItemIcon>automation</mat-icon>
+          <span matListItemTitle>Automatización</span>
+          <span matListItemLine class="subtitle">Workflows</span>
+        </mat-list-item>
+      }
+    </mat-nav-list>
+
+    <mat-divider></mat-divider>
+
+    <!-- User Session Info -->
+    <div class="sidenav-footer">
+      <div class="user-info" *ngIf="user() as currentUser">
+        <div class="user-avatar">
+          <mat-icon>account_circle</mat-icon>
+        </div>
+        <div class="user-details">
+          <strong>{{ currentUser.fullName }}</strong>
+          <span class="user-role">{{ currentUser.role }}</span>
           @if (currentUser.zoneName) {
-            <span class="chip">{{ currentUser.zoneName }}</span>
+            <span class="user-zone">{{ currentUser.zoneName }}</span>
           }
         </div>
-      }
-    </section>
+      </div>
 
-    <section class="sidebar-card sidebar-note">
-      <span class="eyebrow">Ruta sugerida</span>
-      <p>Empieza en Comercial para asignar y seguir procesos. Usa Gerencia para lectura ejecutiva y Operacion para mantener reglas y usuarios.</p>
-    </section>
-
-    <button type="button" class="logout" (click)="logout()">Cerrar sesion</button>
-  </aside>
-
-  <main class="content">
-    <div class="content-inner">
-      <router-outlet />
+      <button
+        mat-raised-button
+        color="warn"
+        (click)="logout()"
+        class="logout-button"
+        [attr.aria-label]="'Cerrar sesión'"
+      >
+        <mat-icon>logout</mat-icon>
+        <span>Cerrar sesión</span>
+      </button>
     </div>
-  </main>
-</div>
+  </mat-sidenav>
+
+  <!-- Main Content -->
+  <mat-sidenav-content class="content">
+    <!-- Toolbar -->
+    <mat-toolbar class="app-toolbar" sticky>
+      <button
+        mat-icon-button
+        (click)="toggleSidenav()"
+        [attr.aria-label]="'Abrir/cerrar menú'"
+        class="toolbar-toggle"
+      >
+        <mat-icon>{{ sidenavOpen() ? 'menu_open' : 'menu' }}</mat-icon>
+      </button>
+
+      <span class="toolbar-spacer"></span>
+
+      <!-- Toolbar Actions -->
+      <button
+        mat-icon-button
+        matTooltip="Ir al dashboard"
+        routerLink="/dashboard"
+        class="toolbar-action"
+      >
+        <mat-icon>home</mat-icon>
+      </button>
+
+      <button
+        mat-icon-button
+        [matMenuTriggerFor]="themeMenu"
+        class="toolbar-action"
+        [matTooltip]="'Tema: ' + themeModeLabel(themeMode())"
+        [attr.aria-label]="'Cambiar tema'"
+      >
+        <mat-icon>{{ themeIcon() }}</mat-icon>
+      </button>
+
+      <button
+        mat-icon-button
+        matTooltip="Notificaciones"
+        matBadge="3"
+        matBadgeColor="warn"
+        [matMenuTriggerFor]="notificationsMenu"
+        class="toolbar-action"
+      >
+        <mat-icon>notifications</mat-icon>
+      </button>
+
+      <button
+        mat-icon-button
+        [matMenuTriggerFor]="userMenu"
+        class="toolbar-action"
+        [attr.aria-label]="'Menú de usuario'"
+      >
+        <mat-icon>account_circle</mat-icon>
+      </button>
+    </mat-toolbar>
+
+    <!-- Page Content -->
+    <main class="main-content">
+      <router-outlet></router-outlet>
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>
+
+<!-- Notifications Menu -->
+<mat-menu #notificationsMenu="matMenu" class="notifications-menu">
+  <button mat-menu-item>
+    <mat-icon>info</mat-icon>
+    <span>Nuevo procesocreado</span>
+  </button>
+  <button mat-menu-item>
+    <mat-icon>warning</mat-icon>
+    <span>Invitación pendiente</span>
+  </button>
+  <button mat-menu-item>
+    <mat-icon>done</mat-icon>
+    <span>Workflow completado</span>
+  </button>
+  <mat-divider></mat-divider>
+  <button mat-menu-item>Ver todas las notificaciones</button>
+</mat-menu>
+
+<!-- User Menu -->
+<mat-menu #userMenu="matMenu" class="user-menu">
+  <div mat-menu-item disabled *ngIf="user() as currentUser" class="user-menu-header">
+    <span>{{ currentUser.email }}</span>
+  </div>
+  <mat-divider></mat-divider>
+  <button mat-menu-item>
+    <mat-icon>account_circle</mat-icon>
+    <span>Mi perfil</span>
+  </button>
+  <button mat-menu-item>
+    <mat-icon>lock</mat-icon>
+    <span>Cambiar contraseña</span>
+  </button>
+  <mat-divider></mat-divider>
+  <button mat-menu-item (click)="logout()">
+    <mat-icon>logout</mat-icon>
+    <span>Cerrar sesión</span>
+  </button>
+</mat-menu>
+
+<!-- Theme Menu -->
+<mat-menu #themeMenu="matMenu" class="user-menu">
+  <div mat-menu-item disabled class="user-menu-header">
+    <span>Tema actual: {{ effectiveTheme() === 'dark' ? 'Oscuro' : 'Claro' }}</span>
+  </div>
+  <mat-divider></mat-divider>
+  <button mat-menu-item (click)="setThemeMode('system')">
+    <mat-icon>{{ themeMode() === 'system' ? 'check' : 'devices' }}</mat-icon>
+    <span>{{ themeModeLabel('system') }}</span>
+  </button>
+  <button mat-menu-item (click)="setThemeMode('light')">
+    <mat-icon>{{ themeMode() === 'light' ? 'check' : 'light_mode' }}</mat-icon>
+    <span>{{ themeModeLabel('light') }}</span>
+  </button>
+  <button mat-menu-item (click)="setThemeMode('dark')">
+    <mat-icon>{{ themeMode() === 'dark' ? 'check' : 'dark_mode' }}</mat-icon>
+    <span>{{ themeModeLabel('dark') }}</span>
+  </button>
+</mat-menu>

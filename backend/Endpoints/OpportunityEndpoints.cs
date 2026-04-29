@@ -12,26 +12,53 @@ internal static class OpportunityEndpoints
         group.MapGet("/opportunities", async (
             HttpContext context,
             string? search,
+            string? entity,
+            string? processCode,
+            string? keyword,
             string? estado,
             long? zoneId,
             long? assignedUserId,
+            string? processCategory,
             bool? invitedOnly,
             bool? todayOnly,
+            bool? chemistryOnly,
             int? page,
             int? pageSize,
             CrmRepository repository,
             CancellationToken cancellationToken) =>
         {
+            var errors = EndpointValidation.ValidateOpportunityFilters(processCategory, keyword);
+            if (errors.Count > 0)
+            {
+                return Results.ValidationProblem(errors);
+            }
+
+            var actor = EndpointContext.GetActor(context);
+            // Por defecto (chemistryOnly == null), mostrar procesos según el rol del usuario
+            // Si chemistryOnly == true, filtrar solo procesos de química
+            // Si chemistryOnly == false, mostrar todos (requiere permisos especiales)
+            var chemistryScope = chemistryOnly switch
+            {
+                true => true,  // Explícitamente solo química
+                false => !CrmRoleRules.CanAccessCommercialAllScope(actor) ? true : false,  // Si no tiene permiso, mostrar solo química
+                null => true   // Por defecto solo química para mantener compatibilidad
+            };
+
             var result = await repository.SearchOpportunitiesAsync(
                 search,
+                entity,
+                processCode,
+                keyword,
                 estado,
                 zoneId,
                 assignedUserId,
+                processCategory,
                 invitedOnly ?? false,
                 todayOnly ?? false,
+                chemistryScope,
                 page ?? 1,
                 pageSize ?? 25,
-                EndpointContext.GetActor(context),
+                actor,
                 cancellationToken);
 
             return Results.Ok(result);
@@ -41,24 +68,51 @@ internal static class OpportunityEndpoints
             HttpContext context,
             string? format,
             string? search,
+            string? entity,
+            string? processCode,
+            string? keyword,
             string? estado,
             long? zoneId,
             long? assignedUserId,
+            string? processCategory,
             bool? invitedOnly,
             bool? todayOnly,
+            bool? chemistryOnly,
             CrmRepository repository,
             CancellationToken cancellationToken) =>
         {
+            var errors = EndpointValidation.ValidateOpportunityFilters(processCategory, keyword);
+            if (errors.Count > 0)
+            {
+                return Results.ValidationProblem(errors);
+            }
+
+            var actor = EndpointContext.GetActor(context);
+            // Por defecto (chemistryOnly == null), mostrar procesos según el rol del usuario
+            // Si chemistryOnly == true, filtrar solo procesos de química
+            // Si chemistryOnly == false, mostrar todos (requiere permisos especiales)
+            var chemistryScope = chemistryOnly switch
+            {
+                true => true,  // Explícitamente solo química
+                false => !CrmRoleRules.CanAccessCommercialAllScope(actor) ? true : false,  // Si no tiene permiso, mostrar solo química
+                null => true   // Por defecto solo química para mantener compatibilidad
+            };
+
             var result = await repository.SearchOpportunitiesAsync(
                 search,
+                entity,
+                processCode,
+                keyword,
                 estado,
                 zoneId,
                 assignedUserId,
+                processCategory,
                 invitedOnly ?? false,
                 todayOnly ?? false,
+                chemistryScope,
                 1,
                 100,
-                EndpointContext.GetActor(context),
+                actor,
                 cancellationToken);
             var normalizedFormat = (format ?? "csv").Trim().ToLowerInvariant();
             return normalizedFormat == "excel"
@@ -313,12 +367,10 @@ internal static class OpportunityEndpoints
             SercopPublicClient sercopPublicClient,
             CancellationToken cancellationToken) =>
         {
-            if (string.IsNullOrWhiteSpace(request.CodesText))
+            var errors = EndpointValidation.ValidateBulkInvitationImportRequest(request);
+            if (errors.Count > 0)
             {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["codesText"] = ["Debes ingresar al menos un codigo de proceso."]
-                });
+                return Results.ValidationProblem(errors);
             }
 
             var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
@@ -341,14 +393,37 @@ internal static class OpportunityEndpoints
         }).RequireAuthorization(CrmPolicies.CommercialManagers);
 
         group.MapPost("/invitations/sync", async (
+            HttpContext context,
             IConfiguration configuration,
             CrmRepository repository,
             SercopInvitationPublicClient invitationClient,
+            ISercopCredentialStore credentialStore,
+            SercopAuthenticatedClient sercopAuthenticatedClient,
             CancellationToken cancellationToken) =>
         {
             var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
             var invitedCompanyRuc = configuration["INVITED_COMPANY_RUC"];
+            if (string.IsNullOrWhiteSpace(invitedCompanyRuc))
+            {
+                var credential = await credentialStore.GetPortalCredentialAsync(cancellationToken);
+                invitedCompanyRuc = credential?.Ruc;
+            }
+
+            await sercopAuthenticatedClient.ValidateStoredCredentialAsync(forceReauthenticate: false, cancellationToken);
             var result = await repository.SyncInvitationsFromPublicReportsAsync(invitationClient, invitedCompanyName, invitedCompanyRuc, cancellationToken);
+
+            var actor = EndpointContext.GetActor(context);
+            await repository.WriteAuditLogAsync(
+                actor?.Id,
+                actor?.LoginName,
+                "invitation_sync",
+                "opportunity",
+                null,
+                EndpointContext.GetClientIp(context),
+                EndpointContext.GetUserAgent(context),
+                new { result.ScannedCount, result.ConfirmedCount, result.UpdatedCount },
+                cancellationToken);
+
             return Results.Ok(result);
         }).RequireAuthorization(CrmPolicies.Operations);
 
@@ -435,7 +510,7 @@ internal static class OpportunityEndpoints
             => $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
 
         var builder = new StringBuilder();
-        builder.AppendLine("Codigo,Titulo,Entidad,Tipo,FechaPublicacion,FechaLimite,Estado,Asignado,Zona,InvitadoHDM,Sla");
+        builder.AppendLine("Codigo,Titulo,Entidad,Tipo,Categoria,FechaPublicacion,FechaLimite,Estado,Asignado,Zona,InvitadoHDM,Sla");
         foreach (var row in rows)
         {
             builder.AppendLine(string.Join(',',
@@ -443,6 +518,7 @@ internal static class OpportunityEndpoints
                 Escape(row.Titulo),
                 Escape(row.Entidad),
                 Escape(row.Tipo),
+                Escape(row.ProcessCategory),
                 Escape(row.FechaPublicacion?.ToString("yyyy-MM-dd HH:mm")),
                 Escape(row.FechaLimite?.ToString("yyyy-MM-dd HH:mm")),
                 Escape(row.Estado),
@@ -459,7 +535,7 @@ internal static class OpportunityEndpoints
     {
         var builder = new StringBuilder();
         builder.AppendLine("<html><head><meta charset=\"utf-8\"></head><body><table border=\"1\">");
-        builder.AppendLine("<tr><th>Codigo</th><th>Titulo</th><th>Entidad</th><th>Tipo</th><th>Fecha publicacion</th><th>Fecha limite</th><th>Estado</th><th>Asignado</th><th>Zona</th><th>Invitado HDM</th><th>SLA</th></tr>");
+        builder.AppendLine("<tr><th>Codigo</th><th>Titulo</th><th>Entidad</th><th>Tipo</th><th>Categoria</th><th>Fecha publicacion</th><th>Fecha limite</th><th>Estado</th><th>Asignado</th><th>Zona</th><th>Invitado HDM</th><th>SLA</th></tr>");
 
         foreach (var row in rows)
         {
@@ -468,6 +544,7 @@ internal static class OpportunityEndpoints
             builder.Append($"<td>{System.Net.WebUtility.HtmlEncode(row.Titulo)}</td>");
             builder.Append($"<td>{System.Net.WebUtility.HtmlEncode(row.Entidad)}</td>");
             builder.Append($"<td>{System.Net.WebUtility.HtmlEncode(row.Tipo)}</td>");
+            builder.Append($"<td>{System.Net.WebUtility.HtmlEncode(row.ProcessCategory)}</td>");
             builder.Append($"<td>{System.Net.WebUtility.HtmlEncode(row.FechaPublicacion?.ToString("yyyy-MM-dd HH:mm"))}</td>");
             builder.Append($"<td>{System.Net.WebUtility.HtmlEncode(row.FechaLimite?.ToString("yyyy-MM-dd HH:mm"))}</td>");
             builder.Append($"<td>{System.Net.WebUtility.HtmlEncode(row.Estado)}</td>");

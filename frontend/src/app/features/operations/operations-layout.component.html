@@ -1,16 +1,40 @@
 <section class="operations">
-  <header class="page-head">
-    <div>
-      <span class="eyebrow">Operacion</span>
-      <h1>Administracion del CRM</h1>
-      <p>Submodulos separados para que la operacion no se mezcle con el trabajo comercial diario.</p>
+  <mat-toolbar class="page-toolbar">
+    <div class="toolbar-content">
+      <div>
+        <span class="eyebrow">Operación</span>
+        <h1>Administración del CRM</h1>
+        <p>Submódulos separados para que la operación no se mezcle con el trabajo comercial diario.</p>
+      </div>
     </div>
-  </header>
+  </mat-toolbar>
 
-  <nav class="subnav">
-    <a routerLink="/operations/users-zones" routerLinkActive="active">Usuarios y zonas</a>
-    <a routerLink="/operations/invitations" routerLinkActive="active">Invitaciones HDM</a>
-    <a routerLink="/operations/keywords" routerLinkActive="active">Palabras clave</a>
+  <nav mat-tab-nav-bar class="subnav">
+    @if (canAccessAdminModules()) {
+      <a mat-tab-link
+         routerLink="/operations/users-zones"
+         routerLinkActive="active"
+         [routerLinkActiveOptions]="{ exact: true }">
+        <mat-icon>people</mat-icon>
+        Usuarios y zonas
+      </a>
+      <a mat-tab-link
+         routerLink="/operations/invitations"
+         routerLinkActive="active"
+         [routerLinkActiveOptions]="{ exact: true }">
+        <mat-icon>mail</mat-icon>
+        Invitaciones HDM
+      </a>
+    }
+    @if (canManageKeywords()) {
+      <a mat-tab-link
+         routerLink="/operations/keywords"
+         routerLinkActive="active"
+         [routerLinkActiveOptions]="{ exact: true }">
+        <mat-icon>label</mat-icon>
+        Palabras clave
+      </a>
+    }
   </nav>
 
   <router-outlet />

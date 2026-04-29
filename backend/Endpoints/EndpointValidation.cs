@@ -1,10 +1,34 @@
 using System.Net.Mail;
+using System.Text.Json;
 using Npgsql;
 
 namespace backend.Endpoints;
 
 internal static class EndpointValidation
 {
+    private const int MaxKeywordLength = 160;
+    private const int MaxKeywordFamilyLength = 120;
+    private const int MaxKeywordNotesLength = 1000;
+    private const int MaxZoneNameLength = 120;
+    private const int MaxZoneDescriptionLength = 500;
+    private const int MaxLoginLength = 80;
+    private const int MaxFullNameLength = 160;
+    private const int MaxEmailLength = 200;
+    private const int MaxPhoneLength = 40;
+    private const int MaxPasswordLength = 200;
+    private const int MaxAssignmentNotesLength = 4000;
+    private const int MaxInvitationSourceLength = 120;
+    private const int MaxInvitationNotesLength = 4000;
+    private const int MaxUrlLength = 600;
+    private const int MaxSavedViewNameLength = 120;
+    private const int MaxSavedViewJsonLength = 4000;
+    private const int MaxActivityBodyLength = 4000;
+    private const int MaxMetadataJsonLength = 4000;
+    private const int MaxReminderNotesLength = 2000;
+    private const int MaxCodesTextLength = 12000;
+    private const int MaxSercopUserLength = 200;
+    private const int MaxSercopRucLength = 20;
+
     public static Dictionary<string, string[]> ValidateKeywordRuleFilters(string? ruleType, string? scope)
     {
         var errors = new Dictionary<string, string[]>();
@@ -30,10 +54,68 @@ internal static class EndpointValidation
         {
             errors["keyword"] = ["La palabra clave es obligatoria."];
         }
+        else if (request.Keyword.Trim().Length > MaxKeywordLength)
+        {
+            errors["keyword"] = [$"La palabra clave no puede superar {MaxKeywordLength} caracteres."];
+        }
 
         if (request.Weight <= 0)
         {
             errors["weight"] = ["El peso debe ser mayor que cero."];
+        }
+
+        ValidateMaxLength(errors, "family", request.Family, MaxKeywordFamilyLength, "La familia");
+        ValidateMaxLength(errors, "notes", request.Notes, MaxKeywordNotesLength, "Las notas");
+
+        return errors;
+    }
+
+    public static Dictionary<string, string[]> ValidateSercopCredentialsRequest(SercopCredentialsUpsertRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(request.Ruc))
+        {
+            errors["ruc"] = ["El RUC SERCOP es obligatorio."];
+        }
+        else if (request.Ruc.Trim().Length > MaxSercopRucLength)
+        {
+            errors["ruc"] = [$"El RUC SERCOP no puede superar {MaxSercopRucLength} caracteres."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.UserName))
+        {
+            errors["userName"] = ["El usuario SERCOP es obligatorio."];
+        }
+        else if (request.UserName.Trim().Length > MaxSercopUserLength)
+        {
+            errors["userName"] = [$"El usuario SERCOP no puede superar {MaxSercopUserLength} caracteres."];
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Password))
+        {
+            errors["password"] = ["La clave SERCOP es obligatoria."];
+        }
+        else if (request.Password.Length > MaxPasswordLength)
+        {
+            errors["password"] = [$"La clave SERCOP no puede superar {MaxPasswordLength} caracteres."];
+        }
+
+        return errors;
+    }
+
+    public static Dictionary<string, string[]> ValidateOpportunityFilters(string? processCategory, string? keyword)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (!OpportunityProcessCategory.IsValidFilter(processCategory))
+        {
+            errors["processCategory"] = ["Debe ser all, infimas, nco, sie, re, other_public o un alias legado soportado."];
+        }
+
+        if (!string.IsNullOrWhiteSpace(keyword) && keyword.Trim().Length > MaxKeywordLength)
+        {
+            errors["keyword"] = [$"La palabra clave no puede superar {MaxKeywordLength} caracteres."];
         }
 
         return errors;
@@ -46,6 +128,10 @@ internal static class EndpointValidation
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             errors["name"] = ["El nombre de la zona es obligatorio."];
+        }
+        else if (request.Name.Trim().Length > MaxZoneNameLength)
+        {
+            errors["name"] = [$"El nombre no puede superar {MaxZoneNameLength} caracteres."];
         }
 
         if (string.IsNullOrWhiteSpace(request.Code))
@@ -61,6 +147,8 @@ internal static class EndpointValidation
             }
         }
 
+        ValidateMaxLength(errors, "description", request.Description, MaxZoneDescriptionLength, "La descripcion");
+
         return errors;
     }
 
@@ -72,15 +160,27 @@ internal static class EndpointValidation
         {
             errors["loginName"] = ["El login es obligatorio."];
         }
+        else if (request.LoginName.Trim().Length > MaxLoginLength)
+        {
+            errors["loginName"] = [$"El login no puede superar {MaxLoginLength} caracteres."];
+        }
 
         if (string.IsNullOrWhiteSpace(request.FullName))
         {
             errors["fullName"] = ["El nombre completo es obligatorio."];
         }
+        else if (request.FullName.Trim().Length > MaxFullNameLength)
+        {
+            errors["fullName"] = [$"El nombre completo no puede superar {MaxFullNameLength} caracteres."];
+        }
 
         if (string.IsNullOrWhiteSpace(request.Email))
         {
             errors["email"] = ["El correo es obligatorio."];
+        }
+        else if (request.Email.Trim().Length > MaxEmailLength)
+        {
+            errors["email"] = [$"El correo no puede superar {MaxEmailLength} caracteres."];
         }
         else if (!IsValidEmail(request.Email))
         {
@@ -97,11 +197,17 @@ internal static class EndpointValidation
         {
             errors["password"] = ["La clave es obligatoria al crear un usuario."];
         }
+        else if (!string.IsNullOrWhiteSpace(request.Password) && request.Password.Trim().Length > MaxPasswordLength)
+        {
+            errors["password"] = [$"La clave no puede superar {MaxPasswordLength} caracteres."];
+        }
 
         if (request.ZoneId.HasValue && !await repository.ZoneExistsAsync(request.ZoneId.Value, cancellationToken))
         {
             errors["zoneId"] = ["La zona seleccionada no existe."];
         }
+
+        ValidateMaxLength(errors, "phone", request.Phone, MaxPhoneLength, "El telefono");
 
         return errors;
     }
@@ -138,6 +244,8 @@ internal static class EndpointValidation
             errors["zoneId"] = ["La zona seleccionada no existe."];
         }
 
+        ValidateMaxLength(errors, "notes", request.Notes, MaxAssignmentNotesLength, "Las notas");
+
         return errors;
     }
 
@@ -150,6 +258,10 @@ internal static class EndpointValidation
             errors["invitationSource"] = ["Debes indicar la fuente de la invitacion confirmada."];
         }
 
+        ValidateMaxLength(errors, "invitationSource", request.InvitationSource, MaxInvitationSourceLength, "La fuente");
+        ValidateMaxLength(errors, "invitationNotes", request.InvitationNotes, MaxInvitationNotesLength, "Las notas");
+        ValidateHttpUrl(errors, "invitationEvidenceUrl", request.InvitationEvidenceUrl);
+
         return errors;
     }
 
@@ -161,10 +273,18 @@ internal static class EndpointValidation
         {
             errors["identifier"] = ["Debes indicar correo o login."];
         }
+        else if (request.Identifier.Trim().Length > MaxEmailLength)
+        {
+            errors["identifier"] = [$"El identificador no puede superar {MaxEmailLength} caracteres."];
+        }
 
         if (string.IsNullOrWhiteSpace(request.Password))
         {
             errors["password"] = ["La clave es obligatoria."];
+        }
+        else if (request.Password.Length > MaxPasswordLength)
+        {
+            errors["password"] = [$"La clave no puede superar {MaxPasswordLength} caracteres."];
         }
 
         return errors;
@@ -178,15 +298,27 @@ internal static class EndpointValidation
         {
             errors["viewType"] = ["El tipo de vista es obligatorio."];
         }
+        else if (!string.Equals(request.ViewType.Trim(), "commercial", StringComparison.OrdinalIgnoreCase))
+        {
+            errors["viewType"] = ["El unico tipo de vista soportado actualmente es commercial."];
+        }
 
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             errors["name"] = ["El nombre es obligatorio."];
         }
+        else if (request.Name.Trim().Length > MaxSavedViewNameLength)
+        {
+            errors["name"] = [$"El nombre no puede superar {MaxSavedViewNameLength} caracteres."];
+        }
 
         if (string.IsNullOrWhiteSpace(request.FiltersJson))
         {
             errors["filtersJson"] = ["Los filtros serializados son obligatorios."];
+        }
+        else
+        {
+            ValidateJsonObject(errors, "filtersJson", request.FiltersJson, MaxSavedViewJsonLength, "Los filtros serializados");
         }
 
         return errors;
@@ -202,6 +334,20 @@ internal static class EndpointValidation
             errors["activityType"] = ["El tipo de actividad no es valido."];
         }
 
+        if (string.IsNullOrWhiteSpace(request.Body))
+        {
+            errors["body"] = ["Debes registrar el contenido de la actividad."];
+        }
+        else if (request.Body.Trim().Length > MaxActivityBodyLength)
+        {
+            errors["body"] = [$"El contenido no puede superar {MaxActivityBodyLength} caracteres."];
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.MetadataJson))
+        {
+            ValidateJsonObject(errors, "metadataJson", request.MetadataJson, MaxMetadataJsonLength, "Los metadatos");
+        }
+
         return errors;
     }
 
@@ -213,6 +359,28 @@ internal static class EndpointValidation
         {
             errors["remindAt"] = ["La fecha del recordatorio no puede quedar en el pasado."];
         }
+
+        ValidateMaxLength(errors, "notes", request.Notes, MaxReminderNotesLength, "Las notas");
+
+        return errors;
+    }
+
+    public static Dictionary<string, string[]> ValidateBulkInvitationImportRequest(BulkInvitationImportRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(request.CodesText))
+        {
+            errors["codesText"] = ["Debes ingresar al menos un codigo de proceso."];
+        }
+        else if (request.CodesText.Trim().Length > MaxCodesTextLength)
+        {
+            errors["codesText"] = [$"El listado no puede superar {MaxCodesTextLength} caracteres."];
+        }
+
+        ValidateMaxLength(errors, "invitationSource", request.InvitationSource, MaxInvitationSourceLength, "La fuente");
+        ValidateMaxLength(errors, "invitationNotes", request.InvitationNotes, MaxInvitationNotesLength, "Las notas");
+        ValidateHttpUrl(errors, "invitationEvidenceUrl", request.InvitationEvidenceUrl);
 
         return errors;
     }
@@ -250,6 +418,57 @@ internal static class EndpointValidation
         catch
         {
             return false;
+        }
+    }
+
+    private static void ValidateMaxLength(Dictionary<string, string[]> errors, string key, string? value, int maxLength, string label)
+    {
+        if (!string.IsNullOrWhiteSpace(value) && value.Trim().Length > maxLength)
+        {
+            errors[key] = [$"{label} no puede superar {maxLength} caracteres."];
+        }
+    }
+
+    private static void ValidateHttpUrl(Dictionary<string, string[]> errors, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        var trimmed = value.Trim();
+        if (trimmed.Length > MaxUrlLength)
+        {
+            errors[key] = [$"La URL no puede superar {MaxUrlLength} caracteres."];
+            return;
+        }
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            errors[key] = ["La URL debe ser absoluta y usar http o https."];
+        }
+    }
+
+    private static void ValidateJsonObject(Dictionary<string, string[]> errors, string key, string rawValue, int maxLength, string label)
+    {
+        var trimmed = rawValue.Trim();
+        if (trimmed.Length > maxLength)
+        {
+            errors[key] = [$"{label} no pueden superar {maxLength} caracteres."];
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(trimmed);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                errors[key] = [$"{label} deben ser un objeto JSON valido."];
+            }
+        }
+        catch (JsonException)
+        {
+            errors[key] = [$"{label} deben ser un objeto JSON valido."];
         }
     }
 }

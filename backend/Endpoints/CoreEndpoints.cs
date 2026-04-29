@@ -1,4 +1,5 @@
 using backend.Auth;
+using System.Text;
 
 namespace backend.Endpoints;
 
@@ -47,9 +48,27 @@ internal static class CoreEndpoints
                 return;
             }
 
-            await context.Response.SendFileAsync(Path.Combine(frontendDist, "index.html"));
+            await ServeSpaIndexAsync(context, frontendDist);
         });
 
         return app;
+    }
+
+    private static async Task ServeSpaIndexAsync(HttpContext context, string frontendDist)
+    {
+        var indexPath = Path.Combine(frontendDist, "index.html");
+        var html = await File.ReadAllTextAsync(indexPath, Encoding.UTF8, context.RequestAborted);
+
+        var pathBase = context.Request.PathBase.HasValue
+            ? context.Request.PathBase.Value!.TrimEnd('/') + "/"
+            : "/";
+
+        html = html.Replace("<base href=\"/\">", $"<base href=\"{pathBase}\">", StringComparison.Ordinal);
+
+        context.Response.ContentType = "text/html; charset=utf-8";
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+        context.Response.Headers.Pragma = "no-cache";
+        context.Response.Headers.Expires = "0";
+        await context.Response.WriteAsync(html, context.RequestAborted);
     }
 }

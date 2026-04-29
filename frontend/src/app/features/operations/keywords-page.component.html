@@ -1,8 +1,177 @@
 <section class="grid">
+  <article class="panel status-panel">
+    <div class="panel-head">
+      <div>
+        <h2>Estado operativo</h2>
+        <p class="panel-copy">Cada cambio en palabras clave dispara una re-evaluacion de procesos actuales y una recaptura SERCOP de los ultimos 14 dias.</p>
+      </div>
+      <button mat-stroked-button color="primary" type="button" [disabled]="refreshRunning()" (click)="runRefresh()">
+        Reprocesar ahora
+      </button>
+    </div>
+
+    @if (refreshLoading()) {
+      <div class="empty">Consultando estado de refresh...</div>
+    } @else if (refreshRun(); as run) {
+      <div class="status-grid">
+        <div class="status-chip" [class.running]="refreshRunning()" [class.error]="run.status === 'error'">
+          {{ run.status === 'pending' ? 'En cola' : run.status === 'running' ? 'En progreso' : run.status === 'completed' ? 'Completado' : 'Con error' }}
+        </div>
+        <div class="status-metric">
+          <span>Ventana</span>
+          <strong>{{ run.requestedWindowDays }} dias</strong>
+        </div>
+        <div class="status-metric">
+          <span>Reevaluados</span>
+          <strong>{{ run.reevaluatedCount }}</strong>
+        </div>
+        <div class="status-metric">
+          <span>Capturados</span>
+          <strong>{{ run.capturedCount }}</strong>
+        </div>
+      </div>
+      <div class="status-copy">
+        <span>Trigger: {{ run.triggerType }}</span>
+        <span>Creado: {{ run.createdAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+        @if (run.startedAt) {
+          <span>Inicio: {{ run.startedAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+        }
+        @if (run.finishedAt) {
+          <span>Fin: {{ run.finishedAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+        }
+        @if (run.initiatedByLoginName) {
+          <span>Usuario: {{ run.initiatedByLoginName }}</span>
+        }
+      </div>
+      @if (run.errorMessage) {
+        <p class="status-error">{{ run.errorMessage }}</p>
+      }
+    } @else {
+      <div class="empty">Todavia no hay ejecuciones de re-evaluacion registradas.</div>
+    }
+  </article>
+
+  @if (isAdmin()) {
+    <article class="panel status-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Cuenta SERCOP compartida</h2>
+          <p class="panel-copy">Pega aqui la cuenta compartida de SERCOP. El backend la guarda cifrada en la base de datos y el navegador solo consume estado enmascarado.</p>
+        </div>
+      </div>
+
+      @if (sercopStatusLoading()) {
+        <div class="empty">Consultando estado de la cuenta SERCOP...</div>
+      } @else if (sercopStatus(); as status) {
+        <div class="status-grid sercop-grid">
+          <div class="status-chip" [class.running]="status.portalSessionStatus === 'authenticated'" [class.error]="status.validationStatus === 'failed' || status.portalSessionStatus === 'error'">
+            {{ status.portalSessionStatus === 'authenticated' ? 'Sesion activa' : status.portalSessionStatus === 'error' ? 'Con error' : 'Sin sesion activa' }}
+          </div>
+          <div class="status-metric">
+            <span>Cuenta configurada</span>
+            <strong>{{ status.configured ? 'Si' : 'No' }}</strong>
+          </div>
+          <div class="status-metric">
+            <span>RUC enmascarado</span>
+            <strong>{{ status.maskedRuc || 'No configurado' }}</strong>
+          </div>
+          <div class="status-metric">
+            <span>Usuario enmascarado</span>
+            <strong>{{ status.maskedUserName || 'No configurado' }}</strong>
+          </div>
+        </div>
+
+        <div class="status-copy">
+          @if (status.configuredByLoginName) {
+            <span>Configurado por: {{ status.configuredByLoginName }}</span>
+          }
+          @if (status.configuredAt) {
+            <span>Configurado: {{ status.configuredAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+          }
+          @if (status.validationStatus) {
+            <span>Ultima validacion: {{ status.validationStatus }}</span>
+          }
+          @if (status.lastValidatedAt) {
+            <span>Validado: {{ status.lastValidatedAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+          }
+          @if (status.lastPortalLoginAt) {
+            <span>Ultimo login portal: {{ status.lastPortalLoginAt | date: 'dd/MM/yyyy HH:mm' : '-0500' }}</span>
+          }
+        </div>
+
+        @if (status.lastValidationError) {
+          <p class="status-error">{{ status.lastValidationError }}</p>
+        }
+
+        <div class="sercop-form">
+          <div class="form-grid">
+            <label>
+              <span>RUC</span>
+              <input
+                autocomplete="off"
+                inputmode="numeric"
+                [disabled]="sercopBusy()"
+                [ngModel]="sercopForm().ruc"
+                (ngModelChange)="patchSercopForm('ruc', $event)"
+              />
+            </label>
+            <label>
+              <span>Usuario portal</span>
+              <input
+                autocomplete="off"
+                [disabled]="sercopBusy()"
+                [ngModel]="sercopForm().userName"
+                (ngModelChange)="patchSercopForm('userName', $event)"
+              />
+            </label>
+            <label class="full">
+              <span>Clave</span>
+              <input
+                type="password"
+                autocomplete="new-password"
+                [disabled]="sercopBusy()"
+                [ngModel]="sercopForm().password"
+                (ngModelChange)="patchSercopForm('password', $event)"
+              />
+            </label>
+          </div>
+
+          <p class="field-hint">La clave no vuelve al frontend despues de guardarse. Si necesitas rotarla, pega una nueva y vuelve a guardar.</p>
+
+          <div class="form-actions">
+            <button mat-flat-button color="primary" type="button" [disabled]="sercopBusy()" (click)="saveSercopCredentials()">
+              {{ sercopSaving() ? 'Guardando...' : 'Guardar credencial' }}
+            </button>
+            <button mat-stroked-button color="primary" type="button" [disabled]="sercopBusy() || !status.configured" (click)="testSercopCredentials()">
+              {{ sercopTesting() ? 'Probando...' : 'Probar acceso guardado' }}
+            </button>
+            <button mat-stroked-button color="warn" type="button" [disabled]="sercopBusy() || !status.configured" (click)="clearSercopCredentials()">
+              {{ sercopClearing() ? 'Eliminando...' : 'Eliminar cuenta' }}
+            </button>
+          </div>
+
+          @if (sercopFeedback()) {
+            <p class="status-success">{{ sercopFeedback() }}</p>
+          }
+
+          @if (sercopError()) {
+            <p class="status-error">{{ sercopError() }}</p>
+          }
+        </div>
+
+        <div class="sercop-guide">
+          <strong>Alternativa por script</strong>
+          <p>Si prefieres sembrar la credencial fuera del navegador, puedes usar el script local y el backend la guardara igual de cifrada.</p>
+          <code>powershell -ExecutionPolicy Bypass -File scripts\set-sercop-credentials.ps1 -SercopRuc TU_RUC -SercopUserName TU_USUARIO</code>
+        </div>
+      }
+    </article>
+  }
+
   <article class="panel">
     <div class="panel-head">
       <h2>Listado de reglas</h2>
-      <button type="button" class="ghost" (click)="resetForm()">Nueva regla</button>
+      <button mat-stroked-button color="primary" type="button" (click)="resetForm()">Nueva regla</button>
     </div>
 
     <div class="filters">
@@ -41,8 +210,10 @@
                 <td>{{ rule.scope }}</td>
                 <td>{{ rule.family || '-' }}</td>
                 <td class="actions">
-                  <button type="button" class="ghost" (click)="editRule(rule)">Editar</button>
-                  <button type="button" class="danger" (click)="deleteRule(rule.id)">Eliminar</button>
+                  <button mat-stroked-button color="primary" type="button" class="table-action" (click)="editRule(rule)">Editar</button>
+                  @if (canDelete) {
+                    <button mat-stroked-button color="warn" type="button" class="table-action" (click)="deleteRule(rule.id)">Eliminar</button>
+                  }
                 </td>
               </tr>
             }
@@ -50,9 +221,9 @@
         </table>
       </div>
       <div class="pager">
-        <button type="button" class="ghost" (click)="changePage(-1)">Anterior</button>
+        <button mat-stroked-button color="primary" type="button" (click)="changePage(-1)">Anterior</button>
         <span>Pagina {{ page() }} · {{ total() }} reglas</span>
-        <button type="button" class="ghost" (click)="changePage(1)">Siguiente</button>
+        <button mat-stroked-button color="primary" type="button" (click)="changePage(1)">Siguiente</button>
       </div>
     }
   </article>
@@ -68,6 +239,6 @@
       <label class="full"><span>Notas</span><textarea [ngModel]="form().notes" (ngModelChange)="patchForm('notes', $event)"></textarea></label>
       <label class="switch"><input type="checkbox" [ngModel]="form().active" (ngModelChange)="patchForm('active', $event)" /> Regla activa</label>
     </div>
-    <button type="button" (click)="saveRule()">Guardar regla</button>
+    <button mat-flat-button color="primary" type="button" (click)="saveRule()">Guardar regla</button>
   </article>
 </section>

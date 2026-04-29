@@ -1,5 +1,5 @@
-<section class="page">
-  <header class="hero">
+<mat-toolbar class="page-toolbar">
+  <div class="toolbar-content">
     <div>
       <span class="eyebrow">Resumen</span>
       <h1>Control diario del pipeline SERCOP</h1>
@@ -7,76 +7,131 @@
     </div>
 
     @if (meta(); as metaInfo) {
-      <article class="hero-card">
-        <strong>Fuente de verdad</strong>
-        <span>{{ metaInfo.storageTarget }}</span>
-        <small>{{ metaInfo.storageMode }}</small>
-      </article>
+      <mat-card class="hero-card">
+        <mat-card-content>
+          <strong>Fuente de verdad</strong>
+          <span class="storage-target">{{ metaInfo.storageTarget }}</span>
+          <small class="storage-mode">{{ metaInfo.storageMode }}</small>
+        </mat-card-content>
+      </mat-card>
     }
-  </header>
+  </div>
+</mat-toolbar>
 
+<section class="page">
   @if (loading()) {
-    <div class="panel">Cargando dashboard...</div>
+    <div class="loading-container">
+      <mat-spinner diameter="48"></mat-spinner>
+      <p>Cargando dashboard...</p>
+    </div>
   } @else if (summary(); as dashboard) {
     <section class="kpis">
-      <article class="kpi">
-        <span>Total visibles</span>
-        <strong>{{ dashboard.totalOpportunities }}</strong>
-      </article>
-      <article class="kpi accent">
-        <span>Invitados HDM</span>
-        <strong>{{ dashboard.invitedOpportunities }}</strong>
-      </article>
-      <article class="kpi">
-        <span>Asignados</span>
-        <strong>{{ dashboard.assignedOpportunities }}</strong>
-      </article>
-      <article class="kpi">
-        <span>Sin asignar</span>
-        <strong>{{ dashboard.unassignedOpportunities }}</strong>
-      </article>
+      <mat-card class="kpi-card">
+        <mat-card-header>
+          <span class="kpi-label">Total visibles</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value">{{ dashboard.totalOpportunities }}</strong>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card accent">
+        <mat-card-header>
+          <span class="kpi-label">Invitados HDM</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value accent">{{ dashboard.invitedOpportunities }}</strong>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <mat-card-header>
+          <span class="kpi-label">Asignados</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value">{{ dashboard.assignedOpportunities }}</strong>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <mat-card-header>
+          <span class="kpi-label">Sin asignar</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value">{{ dashboard.unassignedOpportunities }}</strong>
+        </mat-card-content>
+      </mat-card>
     </section>
 
     <section class="dashboard-grid">
-      <article class="panel">
-        <div class="panel-head">
-          <h2>Accesos directos</h2>
-        </div>
-        <div class="quick-links">
-          <a routerLink="/commercial">Ir al tablero comercial</a>
-          <a routerLink="/management">Abrir gerencia</a>
-          <a routerLink="/operations/users-zones">Configurar operacion</a>
-          <a routerLink="/automation">Ver workflows</a>
-        </div>
-      </article>
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Accesos directos</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content class="quick-links">
+          <a mat-stroked-button routerLink="/commercial/quimica" color="primary">
+            <mat-icon>shopping_cart</mat-icon>
+            Ir al tablero comercial
+          </a>
+          @if (showOperations()) {
+            <a mat-stroked-button [routerLink]="operationsShortcutLink()" color="primary">
+              <mat-icon>settings</mat-icon>
+              {{ operationsShortcutLabel() }}
+            </a>
+          }
+          @if (showManagement()) {
+            <a mat-stroked-button routerLink="/management" color="primary">
+              <mat-icon>bar_chart</mat-icon>
+              Abrir gerencia
+            </a>
+          }
+          @if (showUsersAndZonesShortcut()) {
+            <a mat-stroked-button routerLink="/operations/users-zones" color="primary">
+              <mat-icon>people</mat-icon>
+              Administrar usuarios y zonas
+            </a>
+          }
+          @if (showAutomation()) {
+            <a mat-stroked-button routerLink="/automation" color="primary">
+              <mat-icon>automation</mat-icon>
+              Ver workflows
+            </a>
+          }
+        </mat-card-content>
+        @if (showOperations() && !showUsersAndZonesShortcut()) {
+          <mat-card-footer>
+            <p class="panel-note">{{ operationsShortcutDescription() }}</p>
+          </mat-card-footer>
+        }
+      </mat-card>
 
-      <article class="panel">
-        <div class="panel-head">
-          <h2>Estados</h2>
-        </div>
-        <div class="metric-list">
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Estados</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content class="metric-list">
           @for (status of dashboard.statuses; track status.label) {
             <div class="metric-row">
-              <span>{{ status.label }}</span>
-              <strong>{{ status.count }}</strong>
+              <span class="metric-label">{{ status.label }}</span>
+              <strong class="metric-value">{{ status.count }}</strong>
             </div>
           }
-        </div>
-      </article>
+        </mat-card-content>
+      </mat-card>
 
-      <article class="panel">
-        <div class="panel-head">
-          <h2>Carga por zona</h2>
-        </div>
-        <div class="metric-list">
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Carga por zona</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content class="metric-list">
           @for (zone of dashboard.zoneLoads; track zone.zoneName) {
             <div class="metric-row">
-              <span>{{ zone.zoneName }}</span>
-              <strong>{{ zone.count }}</strong>
+              <span class="metric-label">{{ zone.zoneName }}</span>
+              <strong class="metric-value">{{ zone.count }}</strong>
             </div>
           }
-        </div>
-      </article>
+        </mat-card-content>
+      </mat-card>
     </section>
   }
 </section>

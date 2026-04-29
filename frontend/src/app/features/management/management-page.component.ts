@@ -1,6 +1,16 @@
 import { CommonModule, CurrencyPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
+import { MatTabsModule } from '@angular/material/tabs';
+import { MatToolbarModule } from '@angular/material/toolbar';
 import { firstValueFrom } from 'rxjs';
 import { CrmApiService } from '../../crm-api.service';
 import { ManagementReport } from '../../models';
@@ -8,7 +18,22 @@ import { ManagementReport } from '../../models';
 @Component({
   selector: 'app-management-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, CurrencyPipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ReactiveFormsModule,
+    CurrencyPipe,
+    MatButtonModule,
+    MatCardModule,
+    MatDividerModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatMenuModule,
+    MatProgressSpinnerModule,
+    MatSelectModule,
+    MatTabsModule,
+    MatToolbarModule,
+  ],
   templateUrl: './management-page.component.html',
   styleUrl: './management-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

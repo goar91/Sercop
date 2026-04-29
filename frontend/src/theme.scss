@@ -1,0 +1,52 @@
+@use '@angular/material' as mat;
+
+// Include Material core styles
+@include mat.core();
+
+// Material (M3) light/dark themes applied via CSS selectors.
+$primary: mat.$cyan-palette;
+$tertiary: mat.$blue-palette;
+
+$light-theme: mat.define-theme((
+  color: (
+    theme-type: light,
+    primary: $primary,
+    tertiary: $tertiary,
+  ),
+  typography: (
+    brand-family: 'Manrope',
+    plain-family: 'Manrope',
+  ),
+  density: (
+    scale: 0,
+  ),
+));
+
+$dark-theme: mat.define-theme((
+  color: (
+    theme-type: dark,
+    primary: $primary,
+    tertiary: $tertiary,
+  ),
+  typography: (
+    brand-family: 'Manrope',
+    plain-family: 'Manrope',
+  ),
+  density: (
+    scale: 0,
+  ),
+));
+
+:root {
+  @include mat.all-component-themes($light-theme);
+}
+
+:root[data-theme='dark'] {
+  @include mat.all-component-colors($dark-theme);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    @include mat.all-component-colors($dark-theme);
+  }
+}

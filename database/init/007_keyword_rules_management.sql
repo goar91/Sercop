@@ -8,6 +8,23 @@ SET
   scope = COALESCE(NULLIF(scope, ''), 'all'),
   updated_at = COALESCE(updated_at, created_at, NOW());
 
+WITH ranked_duplicates AS (
+  SELECT
+    id,
+    row_number() OVER (
+      PARTITION BY rule_type, scope, keyword
+      ORDER BY
+        active DESC,
+        updated_at DESC NULLS LAST,
+        id DESC
+    ) AS duplicate_rank
+  FROM keyword_rules
+)
+DELETE FROM keyword_rules rule
+USING ranked_duplicates duplicate
+WHERE rule.id = duplicate.id
+  AND duplicate.duplicate_rank > 1;
+
 DO $$
 BEGIN
   IF EXISTS (

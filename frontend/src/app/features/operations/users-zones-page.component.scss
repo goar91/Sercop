@@ -5,11 +5,12 @@
 }
 
 .panel {
-  border-radius: 1.25rem;
-  border: 1px solid rgba(8, 49, 66, 0.08);
-  background: rgba(255, 252, 246, 0.92);
+  border-radius: 1rem;
+  border: 1px solid var(--crm-border);
+  background: var(--crm-panel-strong);
   padding: 1rem;
-  box-shadow: 0 16px 28px rgba(8, 49, 66, 0.06);
+  box-shadow: var(--crm-shadow);
+  overflow: hidden;
 }
 
 .panel,
@@ -34,7 +35,7 @@ td,
 
 .panel-head h2 {
   margin: 0;
-  color: #173644;
+  color: var(--crm-text);
   font-size: 1.05rem;
 }
 
@@ -52,7 +53,7 @@ th,
 td {
   padding: 0.8rem 0.65rem;
   text-align: left;
-  border-bottom: 1px solid rgba(8, 49, 66, 0.08);
+  border-bottom: 1px solid var(--crm-border);
   vertical-align: top;
   overflow-wrap: anywhere;
 }
@@ -62,7 +63,7 @@ tbody tr {
 }
 
 tbody tr:hover {
-  background: rgba(11, 106, 95, 0.05);
+  background: var(--crm-fill-hover);
 }
 
 .form-grid {
@@ -77,16 +78,14 @@ tbody tr:hover {
 }
 
 .form-grid span {
-  color: #173644;
+  color: var(--crm-text);
   font-size: 0.88rem;
   font-weight: 700;
 }
 
 .form-grid input,
 .form-grid textarea,
-.form-grid select,
-button,
-.ghost {
+.form-grid select {
   min-height: 48px;
   border-radius: 0.95rem;
   font: inherit;
@@ -95,9 +94,10 @@ button,
 .form-grid input,
 .form-grid textarea,
 .form-grid select {
-  border: 1px solid rgba(18, 63, 95, 0.16);
+  border: 1px solid var(--crm-control-border);
   padding: 0.75rem 0.9rem;
-  background: white;
+  background: var(--crm-control-bg);
+  color: var(--crm-text);
 }
 
 .form-grid textarea {
@@ -118,22 +118,14 @@ button,
   min-height: auto;
 }
 
-button,
-.ghost {
+button:not(.mat-mdc-button-base) {
+  min-height: 48px;
+  border-radius: 0.95rem;
   border: 0;
   padding: 0.8rem 1rem;
   cursor: pointer;
-}
-
-button {
-  background: linear-gradient(135deg, #0b6a5f, #123f5f);
-  color: white;
-  font-weight: 700;
-}
-
-.ghost {
-  background: rgba(18, 63, 95, 0.08);
-  color: #173644;
+  background: var(--crm-accent-deep);
+  color: var(--crm-panel-strong);
   font-weight: 700;
 }
 
@@ -148,9 +140,9 @@ button {
 .error-banner {
   margin-top: 1rem;
   border-radius: 1rem;
-  background: rgba(176, 66, 41, 0.1);
+  background: var(--crm-danger-surface);
   padding: 0.85rem 1rem;
-  color: #9c3030;
+  color: var(--crm-danger-text);
   font-weight: 600;
 }
 

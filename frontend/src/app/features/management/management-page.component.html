@@ -1,139 +1,191 @@
-<section class="page">
-  <header class="page-head">
+<mat-toolbar class="page-toolbar">
+  <div class="toolbar-content">
     <div>
       <span class="eyebrow">Gerencia</span>
-      <h1>Reporte ejecutivo del pipeline quimico</h1>
+      <h1>Reporte ejecutivo del pipeline por palabras clave</h1>
       <p>Lectura de carga, acierto, vendedores, zonas y alertas sobre procesos visibles.</p>
     </div>
 
-    <label class="range-picker">
-      <span>Rango</span>
-      <select [ngModel]="range()" (ngModelChange)="updateRange($event)">
-        <option value="7d">7 dias</option>
-        <option value="30d">30 dias</option>
-        <option value="90d">90 dias</option>
-        <option value="365d">365 dias</option>
-        <option value="all">Todo</option>
-      </select>
-    </label>
-  </header>
+    <mat-form-field appearance="outline" class="range-picker">
+      <mat-label>Rango</mat-label>
+      <mat-select [ngModel]="range()" (ngModelChange)="updateRange($event)">
+        <mat-option value="7d">7 días</mat-option>
+        <mat-option value="30d">30 días</mat-option>
+        <mat-option value="90d">90 días</mat-option>
+        <mat-option value="365d">365 días</mat-option>
+        <mat-option value="all">Todo</mat-option>
+      </mat-select>
+    </mat-form-field>
+  </div>
+</mat-toolbar>
 
+<section class="page">
   @if (loading()) {
-    <div class="panel">Cargando reporte gerencial...</div>
+    <div class="loading-container">
+      <mat-spinner diameter="48"></mat-spinner>
+      <p>Cargando reporte gerencial...</p>
+    </div>
   } @else if (report(); as reportData) {
     <section class="kpis">
-      <article class="kpi">
-        <span>Visibles</span>
-        <strong>{{ reportData.summary.totalVisibleOpportunities }}</strong>
-      </article>
-      <article class="kpi">
-        <span>Participando</span>
-        <strong>{{ reportData.summary.participatingOpportunities }}</strong>
-      </article>
-      <article class="kpi accent">
-        <span>Tasa de acierto</span>
-        <strong>{{ reportData.summary.overallHitRatePercent }}%</strong>
-      </article>
-      <article class="kpi">
-        <span>Monto ganado</span>
-        <strong>{{ reportData.summary.totalWonAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
-      </article>
+      <mat-card class="kpi-card">
+        <mat-card-header>
+          <span class="kpi-label">Visibles</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value">{{ reportData.summary.totalVisibleOpportunities }}</strong>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <mat-card-header>
+          <span class="kpi-label">Participando</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value">{{ reportData.summary.participatingOpportunities }}</strong>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card accent">
+        <mat-card-header>
+          <span class="kpi-label">Tasa de acierto</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value accent">{{ reportData.summary.overallHitRatePercent }}%</strong>
+        </mat-card-content>
+      </mat-card>
+      <mat-card class="kpi-card">
+        <mat-card-header>
+          <span class="kpi-label">Monto ganado</span>
+        </mat-card-header>
+        <mat-card-content>
+          <strong class="kpi-value">{{ reportData.summary.totalWonAmount | currency:'USD':'symbol':'1.0-0' }}</strong>
+        </mat-card-content>
+      </mat-card>
     </section>
 
     <section class="management-grid">
-      <article class="panel">
-        <div class="panel-head"><h2>Embudo</h2></div>
-        <div class="bar-list">
-          @for (metric of reportData.pipeline; track metric.label) {
-            <div class="bar-row">
-              <div class="bar-meta">
-                <span>{{ metric.label }}</span>
-                <strong>{{ metric.count }}</strong>
-              </div>
-              <div class="bar-track">
-                <div class="bar-fill" [style.width.%]="metric.count * 100 / maxPipeline()"></div>
-              </div>
-            </div>
-          }
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-head"><h2>Alertas</h2></div>
-        <div class="alert-list">
-          @for (alert of reportData.alerts; track alert.code) {
-            <div class="alert-item" [class.high]="alert.severity === 'high'">
-              <span>{{ alert.label }}</span>
-              <strong>{{ alert.count }}</strong>
-            </div>
-          }
-        </div>
-      </article>
-
-      <article class="panel">
-        <div class="panel-head"><h2>Aging</h2></div>
-        <div class="metric-list">
-          @for (bucket of reportData.aging; track bucket.bucket) {
-            <div class="metric-row">
-              <span>{{ bucket.bucket }}</span>
-              <strong>{{ bucket.count }}</strong>
-            </div>
-          }
-        </div>
-      </article>
-
-      <article class="panel sellers-panel">
-        <div class="panel-head"><h2>Rendimiento por vendedor</h2></div>
-        <div class="seller-list">
-          @for (seller of reportData.sellers; track seller.sellerName) {
-            <div class="seller-card">
-              <div class="seller-head">
-                <strong>{{ seller.sellerName }}</strong>
-                <span>{{ seller.hitRatePercent }}% acierto</span>
-              </div>
-              <div class="seller-bar">
-                <div class="seller-fill" [style.width.%]="seller.wonCount * 100 / maxSellerWins()"></div>
-              </div>
-              <div class="seller-metrics">
-                <span>Asignados {{ seller.assignedCount }}</span>
-                <span>Ganados {{ seller.wonCount }}</span>
-                <span>Participando {{ seller.participatingCount }}</span>
-              </div>
-              @if (seller.winningAreas.length > 0) {
-                <div class="chip-row">
-                  @for (area of seller.winningAreas; track area) {
-                    <span class="chip">{{ area }}</span>
-                  }
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Embudo</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content>
+          <div class="bar-list">
+            @for (metric of reportData.pipeline; track metric.label) {
+              <div class="bar-row">
+                <div class="bar-meta">
+                  <span class="metric-label">{{ metric.label }}</span>
+                  <strong class="metric-value">{{ metric.count }}</strong>
                 </div>
-              }
-            </div>
-          }
-        </div>
-      </article>
+                <div class="bar-track">
+                  <div class="bar-fill" [style.width.%]="metric.count * 100 / maxPipeline()"></div>
+                </div>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
 
-      <article class="panel">
-        <div class="panel-head"><h2>Zonas</h2></div>
-        <div class="metric-list">
-          @for (zone of reportData.zoneMetrics; track zone.zoneName) {
-            <div class="metric-row">
-              <span>{{ zone.zoneName }}</span>
-              <strong>{{ zone.hitRatePercent }}%</strong>
-            </div>
-          }
-        </div>
-      </article>
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Alertas</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content>
+          <div class="alert-list">
+            @for (alert of reportData.alerts; track alert.code) {
+              <div class="alert-item" [class.high]="alert.severity === 'high'">
+                <mat-icon>{{ alert.severity === 'high' ? 'error' : 'info' }}</mat-icon>
+                <span class="alert-label">{{ alert.label }}</span>
+                <strong class="alert-count">{{ alert.count }}</strong>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
 
-      <article class="panel">
-        <div class="panel-head"><h2>Areas ganadas</h2></div>
-        <div class="metric-list">
-          @for (area of reportData.winningAreas; track area.area) {
-            <div class="metric-row">
-              <span>{{ area.area }}</span>
-              <strong>{{ area.wonCount }}</strong>
-            </div>
-          }
-        </div>
-      </article>
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Aging</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content>
+          <div class="metric-list">
+            @for (bucket of reportData.aging; track bucket.bucket) {
+              <div class="metric-row">
+                <span class="metric-label">{{ bucket.bucket }}</span>
+                <strong class="metric-value">{{ bucket.count }}</strong>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="panel sellers-panel">
+        <mat-card-header>
+          <h2 mat-card-title>Rendimiento por vendedor</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content>
+          <div class="seller-list">
+            @for (seller of reportData.sellers; track seller.sellerName) {
+              <div class="seller-card">
+                <div class="seller-head">
+                  <strong class="seller-name">{{ seller.sellerName }}</strong>
+                  <span class="seller-hitrate">{{ seller.hitRatePercent }}% acierto</span>
+                </div>
+                <div class="seller-bar">
+                  <div class="seller-fill" [style.width.%]="seller.wonCount * 100 / maxSellerWins()"></div>
+                </div>
+                <div class="seller-metrics">
+                  <span class="metric-sm">Asignados <strong>{{ seller.assignedCount }}</strong></span>
+                  <span class="metric-sm">Ganados <strong>{{ seller.wonCount }}</strong></span>
+                  <span class="metric-sm">Participando <strong>{{ seller.participatingCount }}</strong></span>
+                </div>
+                @if (seller.winningAreas.length > 0) {
+                  <div class="chip-row">
+                    @for (area of seller.winningAreas; track area) {
+                      <span class="chip">{{ area }}</span>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Zonas</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content>
+          <div class="metric-list">
+            @for (zone of reportData.zoneMetrics; track zone.zoneName) {
+              <div class="metric-row">
+                <span class="metric-label">{{ zone.zoneName }}</span>
+                <strong class="metric-value">{{ zone.hitRatePercent }}%</strong>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card class="panel">
+        <mat-card-header>
+          <h2 mat-card-title>Áreas ganadas</h2>
+        </mat-card-header>
+        <mat-divider></mat-divider>
+        <mat-card-content>
+          <div class="metric-list">
+            @for (area of reportData.winningAreas; track area.area) {
+              <div class="metric-row">
+                <span class="metric-label">{{ area.area }}</span>
+                <strong class="metric-value">{{ area.wonCount }}</strong>
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
     </section>
   }
 </section>

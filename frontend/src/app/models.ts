@@ -71,8 +71,11 @@ export interface CommercialAlertSummary {
   totalAlerts: number;
   criticalAlerts: number;
   warningAlerts: number;
+  showForCurrentUser: boolean;
   items: CommercialAlertItem[];
 }
+
+export type OpportunityProcessCategory = 'all' | 'infimas' | 'nco' | 'sie' | 're' | 'other_public';
 
 export interface OpportunityListItem {
   id: number;
@@ -83,6 +86,9 @@ export interface OpportunityListItem {
   titulo: string;
   entidad?: string | null;
   tipo?: string | null;
+  processCategory: OpportunityProcessCategory;
+  captureScope: string;
+  isChemistryCandidate: boolean;
   fechaPublicacion?: string | null;
   fechaLimite?: string | null;
   montoRef?: number | null;
@@ -92,7 +98,6 @@ export interface OpportunityListItem {
   invitationSource?: string | null;
   invitationVerifiedAt?: string | null;
   matchScore: number;
-  aiScore: number;
   recomendacion?: string | null;
   estado?: string | null;
   resultado?: string | null;
@@ -148,6 +153,10 @@ export interface OpportunityDetail {
   titulo: string;
   entidad?: string | null;
   tipo?: string | null;
+  processCategory: OpportunityProcessCategory;
+  captureScope: string;
+  isChemistryCandidate: boolean;
+  classificationReasons: string[];
   fechaPublicacion?: string | null;
   fechaLimite?: string | null;
   montoRef?: number | null;
@@ -160,7 +169,6 @@ export interface OpportunityDetail {
   invitationEvidenceUrl?: string | null;
   invitationVerifiedAt?: string | null;
   matchScore: number;
-  aiScore: number;
   recomendacion?: string | null;
   estado?: string | null;
   vendedor?: string | null;
@@ -215,6 +223,11 @@ export interface OpportunityVisibility {
   existsInDatabase: boolean;
   visible: boolean;
   opportunityId?: number | null;
+  processCategory?: OpportunityProcessCategory | null;
+  captureScope?: string | null;
+  isChemistryCandidate?: boolean | null;
+  isInvitedMatch: boolean;
+  classificationReasons: string[];
   reasons: string[];
 }
 
@@ -294,6 +307,23 @@ export interface KeywordRule {
   updatedAt: string;
 }
 
+export interface KeywordRefreshRun {
+  id: number;
+  triggerType: string;
+  status: 'pending' | 'running' | 'completed' | 'error' | string;
+  keywordRuleId?: number | null;
+  initiatedByUserId?: number | null;
+  initiatedByLoginName?: string | null;
+  requestedWindowDays: number;
+  createdAt: string;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  reevaluatedCount: number;
+  capturedCount: number;
+  errorCount: number;
+  errorMessage?: string | null;
+}
+
 export interface KeywordRuleUpsertRequest {
   ruleType: 'include' | 'exclude';
   scope: 'all' | 'ocds' | 'nco';
@@ -302,6 +332,35 @@ export interface KeywordRuleUpsertRequest {
   weight: number;
   notes?: string | null;
   active: boolean;
+}
+
+export interface SercopCredentialStatus {
+  configured: boolean;
+  maskedRuc?: string | null;
+  maskedUserName?: string | null;
+  configuredByLoginName?: string | null;
+  configuredAt?: string | null;
+  validationStatus?: string | null;
+  lastValidatedAt?: string | null;
+  lastValidationError?: string | null;
+  portalSessionStatus: string;
+  lastPortalLoginAt?: string | null;
+}
+
+export interface SercopOperationalStatus {
+  configured: boolean;
+  maskedRuc?: string | null;
+  maskedUserName?: string | null;
+  validationStatus?: string | null;
+  lastValidatedAt?: string | null;
+  portalSessionStatus: string;
+  lastPortalLoginAt?: string | null;
+}
+
+export interface SercopCredentialsUpsertRequest {
+  ruc: string;
+  userName: string;
+  password: string;
 }
 
 export interface WorkflowNode {

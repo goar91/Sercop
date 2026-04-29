@@ -99,6 +99,10 @@ $directoriesToCopy = @(
 foreach ($directory in $directoriesToCopy) {
     $source = Join-Path $root $directory
     $destination = Join-Path $packageRoot $directory
+    if (-not (Test-Path $source)) {
+        continue
+    }
+
     Copy-DirectoryFiltered -Source $source -Destination $destination
 }
 

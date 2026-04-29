@@ -396,10 +396,7 @@ public sealed class SercopInvitationPublicClient(HttpClient httpClient)
             return null;
         }
 
-        var normalized = ExtractProcessCodeFromOcid(rawCode) ?? rawCode.Trim();
-        return Regex.IsMatch(normalized, @"-\d{3,}$", RegexOptions.CultureInvariant)
-            ? Regex.Replace(normalized, @"-\d{3,}$", string.Empty, RegexOptions.CultureInvariant).Trim()
-            : normalized.Trim();
+        return (ExtractProcessCodeFromOcid(rawCode) ?? rawCode).Trim();
     }
 
     private static string? ExtractProcessCodeFromOcid(string? value)

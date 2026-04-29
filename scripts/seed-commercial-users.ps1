@@ -29,7 +29,7 @@ function Invoke-CrmJson {
         [string]$Method,
         [string]$Uri,
         [object]$Body,
-        [Microsoft.PowerShell.Commands.WebRequestSession]$Session
+        [object]$Session
     )
 
     if ($null -eq $Body) {
@@ -84,12 +84,12 @@ try {
         throw 'No se encontro la clave del administrador del CRM.'
     }
 
-    $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-    Invoke-CrmJson -Method 'POST' -Uri "$BaseUrl/api/auth/login" -Body @{
+    $loginBody = @{
         identifier = $AdminUser
         password = $AdminPassword
         rememberMe = $true
-    } -Session $session | Out-Null
+    } | ConvertTo-Json -Depth 8
+    Invoke-RestMethod -Method 'POST' -Uri "$BaseUrl/api/auth/login" -Body $loginBody -ContentType 'application/json' -SessionVariable session | Out-Null
 
     $zones = Invoke-CrmJson -Method 'GET' -Uri "$BaseUrl/api/zones" -Body $null -Session $session
     $zonePool = @($zones | Where-Object { $_.active })

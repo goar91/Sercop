@@ -83,7 +83,7 @@ internal static class AuthEndpoints
                 cancellationToken);
 
             return Results.Ok(new LoginResponseDto(user, "Sesion iniciada."));
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting("auth-login");
 
         group.MapPost("/logout", async (
             HttpContext httpContext,

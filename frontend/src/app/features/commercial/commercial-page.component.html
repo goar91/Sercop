@@ -1,192 +1,184 @@
 <section class="page">
-  <header class="page-head">
-    <div class="page-head-copy">
-      <span class="eyebrow">Comercial</span>
-      <h1>Workspace de procesos SERCOP</h1>
-      <p>Un puesto de mando comercial para priorizar procesos, asignar responsables, confirmar invitaciones HDM y dar seguimiento sin saturar la pantalla.</p>
-    </div>
-    <div class="head-actions">
-      <button type="button" class="ghost" (click)="export('csv')">Exportar CSV</button>
-      <button type="button" class="ghost" (click)="export('excel')">Exportar Excel</button>
+  <header class="page-header">
+    <div class="header-content">
+      <div class="header-text">
+        <span class="header-eyebrow">Procesos Comerciales</span>
+        <h1>{{ boardTitle() }}</h1>
+        <p>{{ boardDescription() }}</p>
+      </div>
+      <div class="header-actions">
+        <button mat-stroked-button color="primary" (click)="export('csv')">
+          <mat-icon>download</mat-icon>
+          <span>CSV</span>
+        </button>
+        <button mat-stroked-button color="primary" (click)="export('excel')">
+          <mat-icon>download</mat-icon>
+          <span>Excel</span>
+        </button>
+      </div>
     </div>
   </header>
 
   @if (errorMessage()) {
-    <div class="error-banner">{{ errorMessage() }}</div>
+    <mat-card class="error-card">
+      <mat-card-content>
+        <mat-icon class="error-icon">error_outline</mat-icon>
+        <span class="error-text">{{ errorMessage() }}</span>
+      </mat-card-content>
+    </mat-card>
   }
 
-  <section class="highlight-strip">
+  <section class="kpi-section">
     @for (highlight of workspaceHighlights(); track highlight.label) {
-      <article class="highlight-card" [attr.data-tone]="highlight.tone">
-        <span>{{ highlight.label }}</span>
-        <strong>{{ highlight.value }}</strong>
-      </article>
+      <mat-card class="kpi-card" [attr.data-tone]="highlight.tone">
+        <mat-card-content>
+          <div class="kpi-value">{{ highlight.value }}</div>
+          <div class="kpi-label">{{ highlight.label }}</div>
+        </mat-card-content>
+      </mat-card>
     }
   </section>
 
   @if (sellerBanner()) {
-    <div class="info-banner">{{ sellerBanner() }}</div>
+    <mat-card class="info-card">
+      <mat-card-content>
+        <mat-icon class="info-icon">info</mat-icon>
+        <span>{{ sellerBanner() }}</span>
+      </mat-card-content>
+    </mat-card>
   }
 
-  @if (alertSummary(); as alerts) {
-    <section class="panel alert-panel">
-      <div class="section-head">
-        <div>
-          <h2>{{ isSeller() ? 'Mis alertas comerciales' : 'Alertas comerciales del equipo' }}</h2>
-          <p>Solo procesos recientes y alertas vigentes de las ultimas 48 horas, ordenados por prioridad y fecha real en Ecuador.</p>
-        </div>
-        <div class="alert-kpis">
-          <article>
-            <span>Recientes</span>
-            <strong>{{ newProcessesLane().length }}</strong>
-          </article>
-          <article>
-            <span>Criticas</span>
-            <strong>{{ alerts.criticalAlerts }}</strong>
-          </article>
-          <article>
-            <span>Advertencias</span>
-            <strong>{{ alerts.warningAlerts }}</strong>
-          </article>
-        </div>
-      </div>
+  @if (importOperatorBanner()) {
+    <mat-card class="info-card">
+      <mat-card-content>
+        <mat-icon class="info-icon">visibility</mat-icon>
+        <span>{{ importOperatorBanner() }}</span>
+      </mat-card-content>
+    </mat-card>
+  }
 
-      @if (commercialAlerts().length > 0) {
-        <div class="alert-list">
-          @for (alert of commercialAlerts(); track alert.opportunityId + alert.message) {
-            <article class="alert-item" [attr.data-tone]="alertTone(alert.severity)">
-              <div class="alert-item-top">
-                <span class="process-code alert-process-code" [title]="alert.processCode">{{ alert.processCode }}</span>
-                <span class="status-pill" [attr.data-tone]="alertTone(alert.severity)">{{ alertSeverityLabel(alert.severity) }}</span>
-              </div>
-              <strong class="alert-title" [title]="alert.titulo">{{ alert.titulo }}</strong>
-              <div class="alert-details">
-                <span class="alert-detail">{{ alert.message }}</span>
-                @if (alert.referenceAt) {
-                  <span class="alert-detail"><strong>Referencia:</strong> {{ alert.referenceAt | date:'dd/MM/yyyy HH:mm' }}</span>
-                }
-              </div>
-            </article>
+  @if (sercopStatus(); as status) {
+    <mat-card class="info-card">
+      <mat-card-content>
+        <mat-icon class="info-icon">verified_user</mat-icon>
+        <span>
+          SERCOP: {{ status.portalSessionStatus || 'sin estado' }} · validación {{ status.validationStatus || 'sin validar' }}
+          @if (status.maskedRuc) {
+            · RUC {{ status.maskedRuc }}
           }
-        </div>
-      } @else {
-        <div class="info-card">No hay alertas recientes para los procesos visibles con tu perfil actual.</div>
-      }
-    </section>
+        </span>
+      </mat-card-content>
+    </mat-card>
   }
+
+  <form class="panel filters filters-top" ngNoForm (submit)="$event.preventDefault(); reload()">
+    <div class="section-head">
+      <div>
+        <h2>Filtros operativos</h2>
+        <p>Refina el tablero sin salir del workspace.</p>
+      </div>
+    </div>
+
+    <div class="filter-grid">
+      @if (isAllScope()) {
+        <label class="full">
+          <span>Palabras</span>
+          <input [ngModel]="filters().search" (ngModelChange)="patchFilters('search', $event)" placeholder="Titulo o descripcion" />
+        </label>
+
+        <label>
+          <span>Entidad</span>
+          <input [ngModel]="filters().entity" (ngModelChange)="patchFilters('entity', $event)" placeholder="Entidad contratante" />
+        </label>
+
+        <label>
+          <span>Proceso</span>
+          <input [ngModel]="filters().processCode" (ngModelChange)="patchFilters('processCode', $event)" placeholder="Codigo / OCID / NIC" />
+        </label>
+      } @else {
+        <label class="full">
+          <span>Buscar proceso</span>
+          <input [ngModel]="filters().search" (ngModelChange)="patchFilters('search', $event)" placeholder="Codigo, titulo o entidad" />
+        </label>
+      }
+
+      <label>
+        <span>Palabra clave</span>
+        <input [ngModel]="filters().keyword" (ngModelChange)="patchFilters('keyword', $event)" placeholder="Keyword detectada en el proceso" />
+      </label>
+
+      <label>
+        <span>Estado</span>
+        <select [ngModel]="filters().estado" (ngModelChange)="patchFilters('estado', $event)">
+          <option value="">Todos</option>
+          <option value="nuevo">nuevo</option>
+          <option value="en_revision">en revision</option>
+          <option value="asignado">asignado</option>
+          <option value="presentado">presentado</option>
+          <option value="ganado">ganado</option>
+          <option value="perdido">perdido</option>
+          <option value="no_presentado">no presentado</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Zona</span>
+        <select [ngModel]="filters().zoneId" (ngModelChange)="patchFilters('zoneId', $event)">
+          <option value="">Todas</option>
+          @for (zone of zones(); track zone.id) {
+            <option [value]="zone.id">{{ zone.name }}</option>
+          }
+        </select>
+      </label>
+
+      @if (!isSeller()) {
+        <label>
+          <span>Vendedor</span>
+          <select [ngModel]="filters().assignedUserId" (ngModelChange)="patchFilters('assignedUserId', $event)">
+            <option value="">Todos</option>
+            @for (user of visibleSellerUsers(); track user.id) {
+              <option [value]="user.id">{{ user.fullName }}</option>
+            }
+          </select>
+        </label>
+      }
+    </div>
+
+    <div class="section-head">
+      <div>
+        <h3>Categoria del proceso</h3>
+        <p>Acota el tablero por familia operativa.</p>
+      </div>
+    </div>
+    <div class="process-category-tabs">
+      @for (category of processCategoryTabs; track category.value) {
+        <button type="button"
+                class="process-category-tab"
+                [class.active]="filters().processCategory === category.value"
+                (click)="patchFilters('processCategory', category.value)">
+          {{ category.label }}
+        </button>
+      }
+    </div>
+
+    <div class="switches">
+      <label class="switch"><input type="checkbox" [ngModel]="filters().invitedOnly" (ngModelChange)="patchFilters('invitedOnly', $event)" /> Solo invitados HDM</label>
+      <label class="switch"><input type="checkbox" [ngModel]="filters().todayOnly" (ngModelChange)="patchFilters('todayOnly', $event)" /> Solo procesos del dia</label>
+    </div>
+
+    @if (filters().todayOnly) {
+      <div class="info-card">
+        Si un proceso no aparece, puede estar oculto por fecha, por la keyword filtrada o por las reglas activas de palabras clave.
+      </div>
+    }
+
+    <div class="filter-actions">
+      <button type="button" class="ghost" (click)="clearFilters()">Limpiar filtros</button>
+      <button type="submit">Aplicar filtros</button>
+    </div>
+  </form>
 
   <section class="workspace">
-    <aside class="filters-column">
-      <form class="panel filters" ngNoForm (submit)="$event.preventDefault(); reload()">
-        <div class="section-head">
-          <div>
-            <h2>Filtros operativos</h2>
-            <p>Refina el tablero sin salir del workspace.</p>
-          </div>
-        </div>
-
-        <div class="filter-grid">
-          <label class="full">
-            <span>Buscar proceso</span>
-            <input [ngModel]="filters().search" (ngModelChange)="patchFilters('search', $event)" placeholder="Codigo, titulo o entidad" />
-          </label>
-
-          <label>
-            <span>Estado</span>
-            <select [ngModel]="filters().estado" (ngModelChange)="patchFilters('estado', $event)">
-              <option value="">Todos</option>
-              <option value="nuevo">nuevo</option>
-              <option value="en_revision">en revision</option>
-              <option value="asignado">asignado</option>
-              <option value="presentado">presentado</option>
-              <option value="ganado">ganado</option>
-              <option value="perdido">perdido</option>
-              <option value="no_presentado">no presentado</option>
-            </select>
-          </label>
-
-          <label>
-            <span>Zona</span>
-            <select [ngModel]="filters().zoneId" (ngModelChange)="patchFilters('zoneId', $event)">
-              <option value="">Todas</option>
-              @for (zone of zones(); track zone.id) {
-                <option [value]="zone.id">{{ zone.name }}</option>
-              }
-            </select>
-          </label>
-
-          @if (!isSeller()) {
-            <label>
-              <span>Vendedor</span>
-              <select [ngModel]="filters().assignedUserId" (ngModelChange)="patchFilters('assignedUserId', $event)">
-                <option value="">Todos</option>
-                @for (user of visibleSellerUsers(); track user.id) {
-                  <option [value]="user.id">{{ user.fullName }}</option>
-                }
-              </select>
-            </label>
-          }
-        </div>
-
-        <div class="switches">
-          <label class="switch"><input type="checkbox" [ngModel]="filters().invitedOnly" (ngModelChange)="patchFilters('invitedOnly', $event)" /> Solo invitados HDM</label>
-          <label class="switch"><input type="checkbox" [ngModel]="filters().todayOnly" (ngModelChange)="patchFilters('todayOnly', $event)" /> Solo procesos del dia</label>
-        </div>
-
-        @if (filters().todayOnly) {
-          <div class="info-card">
-            Si un proceso no aparece, puede estar oculto por fecha. Usa el verificador de soporte para distinguir fecha vs. filtro quimico.
-          </div>
-        }
-
-        <button type="submit">Aplicar filtros</button>
-      </form>
-
-      <form class="panel saved-view-panel" ngNoForm (submit)="$event.preventDefault(); saveCurrentView()">
-        <div class="section-head">
-          <div>
-            <h3>Vistas guardadas</h3>
-            <p>Guarda combinaciones de filtros y agrupacion.</p>
-          </div>
-        </div>
-        <div class="saved-view-form">
-          <input [ngModel]="savedViewForm().name" (ngModelChange)="patchSavedViewForm('name', $event)" placeholder="Nombre de vista" />
-          <label class="switch"><input type="checkbox" [ngModel]="savedViewForm().shared" (ngModelChange)="patchSavedViewForm('shared', $event)" /> Compartir</label>
-          <button type="submit" class="ghost">Guardar vista</button>
-        </div>
-        <div class="saved-list">
-          @for (view of savedViews(); track view.id) {
-            <div class="saved-item">
-              <button type="button" class="saved-link" (click)="applySavedView(view)">{{ view.name }}</button>
-              <button type="button" class="remove" (click)="deleteSavedView(view)">x</button>
-            </div>
-          }
-        </div>
-      </form>
-
-      <form class="panel support-check" ngNoForm (submit)="$event.preventDefault(); runVisibilityCheck()">
-        <div class="section-head">
-          <div>
-            <h3>Soporte de visibilidad</h3>
-            <p>Explica por que un codigo entra o sale del tablero.</p>
-          </div>
-        </div>
-        <input [ngModel]="visibilityCode()" (ngModelChange)="visibilityCode.set($event)" placeholder="NIC u OCID" />
-        <button type="submit" class="ghost">Consultar</button>
-        @if (supportVisibility(); as visibility) {
-          <div class="support-result" [class.hidden]="!visibility.visible">
-            <strong>{{ visibility.processCode }}</strong>
-            <span>{{ visibility.visible ? 'Visible con filtro actual' : 'No visible con filtro actual' }}</span>
-            <ul>
-              @for (reason of visibility.reasons; track reason) {
-                <li>{{ reason }}</li>
-              }
-            </ul>
-          </div>
-        }
-      </form>
-    </aside>
-
     <section class="board-column">
       <section class="panel board-shell">
         <div class="board-head">
@@ -196,8 +188,8 @@
             <p>{{ boardDescription() }}</p>
           </div>
           <div class="board-head-meta">
-            <strong>{{ totalCount() }}</strong>
-            <span>procesos visibles</span>
+            <strong>{{ opportunities().length }} / {{ totalCount() }}</strong>
+            <span>{{ pageRangeLabel() }}</span>
           </div>
         </div>
 
@@ -219,6 +211,21 @@
               }
             }
           </div>
+
+          <div class="pager">
+            <button type="button" class="ghost" (click)="goToFirstPage()" [disabled]="currentPage() === 1">Inicio</button>
+            <button type="button" class="ghost" (click)="goToPreviousPage()" [disabled]="currentPage() === 1">Anterior</button>
+            <span class="pager-status">Pagina {{ currentPage() }} / {{ totalPages() }}</span>
+            <button type="button" class="ghost" (click)="goToNextPage()" [disabled]="currentPage() >= totalPages()">Siguiente</button>
+            <label class="pager-size">
+              <span>Tamaño</span>
+              <select [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)">
+                <option [value]="25">25</option>
+                <option [value]="50">50</option>
+                <option [value]="100">100</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         @if (loading()) {
@@ -229,7 +236,7 @@
               <header>
                 <div>
                   <h3>Nuevos hoy</h3>
-                  <p>Procesos publicados recientemente con máxima prioridad.</p>
+                  <p>Procesos publicados recientemente con maxima prioridad.</p>
                 </div>
                 <span class="lane-count">{{ newProcessesLane().length }}</span>
               </header>
@@ -240,6 +247,11 @@
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
                       <div class="card-top-tags">
                         <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                        @if (item.isInvitedMatch) {
+                          <span class="status-pill invited-badge">INVITADO HDM</span>
+                        } @else {
+                          <span class="status-pill not-invited-badge">NO INVITADO HDM</span>
+                        }
                         <span class="status-pill new-badge">NUEVO</span>
                       </div>
                     </div>
@@ -258,8 +270,12 @@
                         <span>{{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
                       </div>
                       <div>
-                        <small>Límite</small>
-                        <span>{{ item.fechaLimite ? (item.fechaLimite | date:'dd/MM/yyyy HH:mm') : 'Sin fecha límite' }}</span>
+                        <small>Tipo</small>
+                        <span>{{ item.tipo || describeProcessCategory(item.processCategory) }}</span>
+                      </div>
+                      <div>
+                        <small>Limite</small>
+                        <span>{{ item.fechaLimite ? (item.fechaLimite | date:'dd/MM/yyyy HH:mm') : 'Sin fecha limite' }}</span>
                       </div>
                     </div>
                     <div class="card-foot">
@@ -274,8 +290,8 @@
             <article class="lane lane-current">
               <header>
                 <div>
-                  <h3>0-1 día</h3>
-                  <p>Procesos recientes de ayer o dentro de la ventana corta, ordenados por publicación.</p>
+                  <h3>Ayer</h3>
+                  <p>Procesos publicados el dia anterior, ordenados por fecha de publicacion.</p>
                 </div>
                 <span class="lane-count">{{ currentLane().length }}</span>
               </header>
@@ -286,6 +302,11 @@
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
                       <div class="card-top-tags">
                         <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                        @if (item.isInvitedMatch) {
+                          <span class="status-pill invited-badge">INVITADO HDM</span>
+                        } @else {
+                          <span class="status-pill not-invited-badge">NO INVITADO HDM</span>
+                        }
                         <span class="status-pill subtle">{{ item.daysOpen }} día{{ item.daysOpen === 1 ? '' : 's' }}</span>
                       </div>
                     </div>
@@ -304,8 +325,12 @@
                         <span>{{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
                       </div>
                       <div>
-                        <small>Límite</small>
-                        <span>{{ item.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</span>
+                        <small>Tipo</small>
+                        <span>{{ item.tipo || describeProcessCategory(item.processCategory) }}</span>
+                      </div>
+                      <div>
+                        <small>Limite</small>
+                        <span>{{ item.fechaLimite ? (item.fechaLimite | date:'dd/MM/yyyy HH:mm') : 'Sin fecha limite' }}</span>
                       </div>
                     </div>
                     <div class="card-foot">
@@ -332,6 +357,11 @@
                       <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
                       <div class="card-top-tags">
                         <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                        @if (item.isInvitedMatch) {
+                          <span class="status-pill invited-badge">INVITADO HDM</span>
+                        } @else {
+                          <span class="status-pill not-invited-badge">NO INVITADO HDM</span>
+                        }
                         <span class="status-pill subtle">{{ item.daysOpen }} días</span>
                       </div>
                     </div>
@@ -349,8 +379,12 @@
                         <span>{{ item.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</span>
                       </div>
                       <div>
-                        <small>Límite</small>
-                        <span>{{ item.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</span>
+                        <small>Tipo</small>
+                        <span>{{ item.tipo || describeProcessCategory(item.processCategory) }}</span>
+                      </div>
+                      <div>
+                        <small>Limite</small>
+                        <span>{{ item.fechaLimite ? (item.fechaLimite | date:'dd/MM/yyyy HH:mm') : 'Sin fecha limite' }}</span>
                       </div>
                     </div>
                     <div class="card-foot">
@@ -378,11 +412,19 @@
                     <button type="button" class="opportunity-card" [class.active]="selectedOpportunityId() === item.id" (click)="selectOpportunity(item)">
                       <div class="card-top">
                         <span class="process-code" [title]="item.processCode">{{ item.processCode }}</span>
-                        <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                        <div class="card-top-tags">
+                          <span class="status-pill subtle" [attr.data-tone]="priorityTone(item.priority)">{{ humanizeLabel(item.priority) }}</span>
+                          @if (item.isInvitedMatch) {
+                            <span class="status-pill invited-badge">INVITADO HDM</span>
+                          } @else {
+                            <span class="status-pill not-invited-badge">NO INVITADO HDM</span>
+                          }
+                        </div>
                       </div>
                       <span class="card-title">{{ item.titulo }}</span>
                       <div class="card-meta">
                         <span>{{ item.entidad || 'Entidad no registrada' }}</span>
+                        <span>{{ item.tipo || describeProcessCategory(item.processCategory) }}</span>
                         <span>{{ item.assignedUserName || 'Sin asignar' }}</span>
                       </div>
                       <div class="card-foot">
@@ -397,12 +439,6 @@
           </section>
         }
       </section>
-
-      <div class="pager">
-        <button type="button" class="ghost" [disabled]="page() <= 1" (click)="changePage(-1)">Anterior</button>
-        <span>Pagina {{ page() }} de {{ totalPages() }} · {{ totalCount() }} procesos</span>
-        <button type="button" class="ghost" [disabled]="page() >= totalPages()" (click)="changePage(1)">Siguiente</button>
-      </div>
     </section>
 
     <aside class="detail panel">
@@ -433,7 +469,7 @@
 
           <section class="summary-grid">
             <div><span>Publicacion</span><strong>{{ detail.fechaPublicacion | date:'dd/MM/yyyy HH:mm' }}</strong></div>
-            <div><span>Limite</span><strong>{{ detail.fechaLimite | date:'dd/MM/yyyy HH:mm' }}</strong></div>
+            <div><span>Limite</span><strong>{{ detail.fechaLimite ? (detail.fechaLimite | date:'dd/MM/yyyy HH:mm') : 'Sin fecha limite' }}</strong></div>
             <div><span>Dias abierto</span><strong>{{ detail.daysOpen }}</strong></div>
             <div><span>Monto</span><strong>{{ detail.montoRef ?? 0 | number:'1.0-2' }}</strong></div>
             <div><span>Zona</span><strong>{{ detail.zoneName || 'Sin zona' }}</strong></div>
@@ -597,5 +633,119 @@
         <div class="detail-empty">Selecciona un proceso para revisar detalle, actividad y recordatorios.</div>
       }
     </aside>
+
+    <section class="filters-column">
+      <form class="panel saved-view-panel" ngNoForm (submit)="$event.preventDefault(); saveCurrentView()">
+        <div class="section-head">
+          <div>
+            <h3>Vistas guardadas</h3>
+            <p>Guarda combinaciones de filtros y agrupacion.</p>
+          </div>
+        </div>
+        <div class="saved-view-form">
+          <input [ngModel]="savedViewForm().name" (ngModelChange)="patchSavedViewForm('name', $event)" placeholder="Nombre de vista" />
+          <label class="switch"><input type="checkbox" [ngModel]="savedViewForm().shared" (ngModelChange)="patchSavedViewForm('shared', $event)" /> Compartir</label>
+          <button type="submit" class="ghost">Guardar vista</button>
+        </div>
+        <div class="saved-list">
+          @for (view of savedViews(); track view.id) {
+            <div class="saved-item">
+              <button type="button" class="saved-link" (click)="applySavedView(view)">{{ view.name }}</button>
+              <button type="button" class="remove" (click)="deleteSavedView(view)">x</button>
+            </div>
+          }
+        </div>
+      </form>
+
+      <form class="panel support-check" ngNoForm (submit)="$event.preventDefault(); runVisibilityCheck()">
+        <div class="section-head">
+          <div>
+            <h3>Soporte de visibilidad</h3>
+            <p>Explica por que un codigo entra o sale del tablero.</p>
+          </div>
+        </div>
+        <input [ngModel]="visibilityCode()" (ngModelChange)="visibilityCode.set($event)" placeholder="NIC / OCID / Codigo" />
+        <button type="submit" class="ghost">Consultar</button>
+        @if (supportVisibility(); as visibility) {
+          <div class="support-result" [class.hidden]="!visibility.visible">
+            <strong>{{ visibility.processCode }}</strong>
+            <span>{{ visibility.visible ? 'Visible con filtro actual' : 'No visible con filtro actual' }}</span>
+            <span>Categoria: {{ visibility.processCategory ? describeProcessCategory(visibility.processCategory) : 'Sin clasificar' }}</span>
+            <span>Scope de captura: {{ visibility.captureScope || 'Sin scope' }}</span>
+            <span>Quimica: {{ visibility.isChemistryCandidate ? 'Sí' : 'No' }}</span>
+            <span>Invitación HDM: {{ visibility.isInvitedMatch ? 'Sí' : 'No' }}</span>
+            @if (visibility.classificationReasons.length > 0) {
+              <ul>
+                @for (reason of visibility.classificationReasons; track reason) {
+                  <li>{{ reason }}</li>
+                }
+              </ul>
+            }
+            <ul>
+              @for (reason of visibility.reasons; track reason) {
+                <li>{{ reason }}</li>
+              }
+            </ul>
+          </div>
+          @if (!visibility.existsInDatabase && canManageAssignments()) {
+            <button type="button" class="ghost" (click)="importVisibilityCode()" [disabled]="visibilityImporting()">
+              {{ visibilityImporting() ? 'Importando...' : 'Importar por codigo' }}
+            </button>
+          }
+        }
+      </form>
+
+      @if (shouldShowAlertPanel()) {
+        <section class="panel alert-panel">
+          <div class="section-head">
+            <div>
+              <h3>{{ isSeller() ? 'Mis alertas comerciales' : 'Alertas comerciales del equipo' }}</h3>
+              <p>Procesos recientes con alertas en las ultimas 48 horas.</p>
+            </div>
+          </div>
+
+          @if (alertSummary(); as alerts) {
+            <div class="alert-kpis">
+              <article>
+                <span>Recientes</span>
+                <strong>{{ newProcessesLane().length }}</strong>
+              </article>
+              <article>
+                <span>Criticas</span>
+                <strong>{{ alerts.criticalAlerts }}</strong>
+              </article>
+              <article>
+                <span>Advertencias</span>
+                <strong>{{ alerts.warningAlerts }}</strong>
+              </article>
+            </div>
+
+            @if (commercialAlerts().length > 0) {
+              <div class="alert-list">
+                @for (alert of commercialAlerts(); track alert.opportunityId + alert.message) {
+                  <article class="alert-item" [attr.data-tone]="alertTone(alert.severity)">
+                    <div class="alert-item-top">
+                      <span class="process-code alert-process-code" [title]="alert.processCode">{{ alert.processCode }}</span>
+                      <span class="status-pill" [attr.data-tone]="alertTone(alert.severity)">{{ alertSeverityLabel(alert.severity) }}</span>
+                    </div>
+                    <strong class="alert-title" [title]="alert.titulo">{{ alert.titulo }}</strong>
+                    <div class="alert-details">
+                      <span class="alert-detail">{{ alert.message }}</span>
+                      @if (alert.referenceAt) {
+                        <span class="alert-detail"><strong>Referencia:</strong> {{ alert.referenceAt | date:'dd/MM/yyyy HH:mm' }}</span>
+                      }
+                    </div>
+                  </article>
+                }
+              </div>
+            } @else {
+              <div class="info-card">No hay alertas recientes para los procesos visibles con tu perfil actual.</div>
+            }
+          } @else {
+            <div class="info-card">Cargando alertas comerciales del equipo...</div>
+          }
+        </section>
+      }
+    </section>
   </section>
 </section>

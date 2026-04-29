@@ -12,9 +12,9 @@
         "CRM_DB_PORT": "5432",
         "POSTGRES_DB": "sercop_crm",
         "POSTGRES_USER": "sercop_local",
-        "POSTGRES_PASSWORD": "SercopLocal#2026!",
+        "POSTGRES_PASSWORD": "change-me",
         "N8N_EDITOR_BASE_URL": "http://localhost:5678/",
-        "RESPONSIBLE_EMAIL": "gersonadames323@gmail.com",
+        "RESPONSIBLE_EMAIL": "admin@empresa.local",
         "INVITED_COMPANY_NAME": "HDM"
       }
     }

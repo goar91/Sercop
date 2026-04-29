@@ -48,11 +48,38 @@ public sealed class PublicInvitationSyncService(
         using var scope = serviceProvider.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<CrmRepository>();
         var invitationClient = scope.ServiceProvider.GetRequiredService<SercopInvitationPublicClient>();
+        var credentialStore = scope.ServiceProvider.GetRequiredService<ISercopCredentialStore>();
+        var sercopAuthenticatedClient = scope.ServiceProvider.GetRequiredService<SercopAuthenticatedClient>();
         var invitedCompanyName = configuration["INVITED_COMPANY_NAME"] ?? "HDM";
         var invitedCompanyRuc = configuration["INVITED_COMPANY_RUC"];
+        if (string.IsNullOrWhiteSpace(invitedCompanyRuc))
+        {
+            try
+            {
+                var credential = await credentialStore.GetPortalCredentialAsync(cancellationToken);
+                if (credential is not null && !string.IsNullOrWhiteSpace(credential.Ruc))
+                {
+                    invitedCompanyRuc = credential.Ruc.Trim();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "No se pudo resolver INVITED_COMPANY_RUC desde sercop_credentials.");
+            }
+        }
 
         try
         {
+            var sessionValidation = await sercopAuthenticatedClient.ValidateStoredCredentialAsync(forceReauthenticate: false, cancellationToken);
+            if (!sessionValidation.IsSuccess)
+            {
+                logger.LogWarning("La cuenta SERCOP configurada no esta autenticada. El sync continuara solo con el RUC configurado. Motivo={FailureReason}", sessionValidation.FailureReason);
+            }
+
             var result = await repository.SyncInvitationsFromPublicReportsAsync(
                 invitationClient,
                 invitedCompanyName,

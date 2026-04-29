@@ -5,7 +5,7 @@
     <article class="panel table-panel">
       <div class="panel-head">
         <h2>Zonas</h2>
-        <button type="button" class="ghost" (click)="resetZoneForm()">Nueva zona</button>
+        <button mat-stroked-button color="primary" type="button" (click)="resetZoneForm()">Nueva zona</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -37,13 +37,13 @@
         <label class="full"><span>Descripcion</span><textarea [ngModel]="zoneForm().description" (ngModelChange)="patchZoneForm('description', $event)"></textarea></label>
         <label class="switch"><input type="checkbox" [ngModel]="zoneForm().active" (ngModelChange)="patchZoneForm('active', $event)" /> Zona activa</label>
       </div>
-      <button type="button" (click)="saveZone()">Guardar zona</button>
+      <button mat-flat-button color="primary" type="button" (click)="saveZone()">Guardar zona</button>
     </article>
 
     <article class="panel table-panel">
       <div class="panel-head">
         <h2>Usuarios</h2>
-        <button type="button" class="ghost" (click)="resetUserForm()">Nuevo usuario</button>
+        <button mat-stroked-button color="primary" type="button" (click)="resetUserForm()">Nuevo usuario</button>
       </div>
       <div class="table-wrap">
         <table>
@@ -68,9 +68,9 @@
         </table>
       </div>
       <div class="pager">
-        <button type="button" class="ghost" (click)="changeUserPage(userPage() - 1)">Anterior</button>
+        <button mat-stroked-button color="primary" type="button" (click)="changeUserPage(userPage() - 1)">Anterior</button>
         <span>Pagina {{ userPage() }} · {{ userTotal() }} usuarios</span>
-        <button type="button" class="ghost" (click)="changeUserPage(userPage() + 1)">Siguiente</button>
+        <button mat-stroked-button color="primary" type="button" (click)="changeUserPage(userPage() + 1)">Siguiente</button>
       </div>
     </article>
 
@@ -87,7 +87,7 @@
         <label class="switch"><input type="checkbox" [ngModel]="userForm().active" (ngModelChange)="patchUserForm('active', $event)" /> Usuario activo</label>
         <label class="switch"><input type="checkbox" [ngModel]="userForm().mustChangePassword" (ngModelChange)="patchUserForm('mustChangePassword', $event)" /> Forzar cambio de clave</label>
       </div>
-      <button type="button" (click)="saveUser()">Guardar usuario</button>
+      <button mat-flat-button color="primary" type="button" (click)="saveUser()">Guardar usuario</button>
     </article>
   </section>
 

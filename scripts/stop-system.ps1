@@ -1,6 +1,5 @@
 param(
     [switch]$SkipDocker,
-    [switch]$KeepNgrok,
     [switch]$KeepCrmTunnel
 )
 
@@ -9,30 +8,28 @@ $root = Split-Path -Parent $PSScriptRoot
 $pidFile = Join-Path $root 'run\crm.pid'
 $crmExternalUrlFile = Join-Path $root 'run\crm-external-url.txt'
 $crmPort = 5050
+$localPostgresStopScript = Join-Path $root 'scripts\stop-local-postgres.ps1'
 
 function Stop-CrmFromPidFile {
     param([string]$PidPath)
 
     if (-not (Test-Path $PidPath)) {
-        Write-Host 'CRM no tiene PID registrado. Nada que detener.'
         return
     }
 
     $rawPid = (Get-Content $PidPath -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
     if (-not $rawPid) {
         Remove-Item $PidPath -Force -ErrorAction SilentlyContinue
-        Write-Host 'PID vacio. Archivo limpiado.'
         return
     }
 
     $process = Get-Process -Id ([int]$rawPid) -ErrorAction SilentlyContinue
     if (-not $process) {
         Remove-Item $PidPath -Force -ErrorAction SilentlyContinue
-        Write-Host 'El proceso del CRM ya no estaba activo. Archivo PID limpiado.'
         return
     }
 
-    Stop-Process -Id $process.Id -Force
+    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
     Remove-Item $PidPath -Force -ErrorAction SilentlyContinue
     Write-Host "CRM detenido. PID $($process.Id)."
 }
@@ -59,29 +56,36 @@ function Stop-CrmListenersByPort {
     }
 }
 
+function Stop-LocalNgrokProcesses {
+    $localNgrokProcesses = @(Get-Process -Name 'ngrok' -ErrorAction SilentlyContinue)
+    foreach ($process in $localNgrokProcesses) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        Write-Host "Proceso ngrok residual detenido. PID $($process.Id)."
+    }
+}
+
 Push-Location $root
 try {
     Stop-CrmFromPidFile -PidPath $pidFile
     Stop-CrmListenersByPort -Port $crmPort
-    Remove-Item $crmExternalUrlFile -Force -ErrorAction SilentlyContinue
+    if (-not $KeepCrmTunnel) {
+        Remove-Item $crmExternalUrlFile -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not $KeepCrmTunnel) {
+        docker compose --profile crm-ngrok stop crm-ngrok | Out-Null
+        Stop-LocalNgrokProcesses
+    }
 
     if (-not $SkipDocker) {
-        Write-Host 'Deteniendo servicios Docker: n8n, mailpit, ollama y qdrant...'
-        docker compose stop n8n mailpit ollama qdrant
+        Write-Host 'Deteniendo servicios Docker internos: n8n y mailpit...'
+        docker compose stop n8n mailpit
+    }
 
-        if (-not $KeepNgrok) {
-            Write-Host 'Deteniendo tunel ngrok...'
-            docker compose --profile tunnel stop ngrok
-        }
-
-        if (-not $KeepCrmTunnel) {
-            Write-Host 'Deteniendo tunel externo del CRM...'
-            docker compose --profile crm-tunnel stop crm-cloudflared
-            docker compose --profile crm-ngrok stop crm-ngrok
-        }
+    if (Test-Path $localPostgresStopScript) {
+        powershell -NoProfile -ExecutionPolicy Bypass -File $localPostgresStopScript
     }
 }
 finally {
     Pop-Location
 }
-

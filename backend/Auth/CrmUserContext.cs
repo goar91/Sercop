@@ -23,11 +23,20 @@ internal sealed record AuthenticatedCrmUser(
 
 internal static class CrmRoleRules
 {
+    public static bool IsImportOperator(AuthenticatedCrmUser? actor)
+        => string.Equals(actor?.LoginName, "importaciones", StringComparison.OrdinalIgnoreCase);
+
     public static bool IsSeller(AuthenticatedCrmUser? actor)
         => string.Equals(actor?.Role, "seller", StringComparison.OrdinalIgnoreCase);
 
     public static bool CanManageCommercialAssignments(AuthenticatedCrmUser? actor)
         => actor?.Role is "admin" or "gerencia" or "coordinator";
+
+    public static bool CanAccessCommercialAllScope(AuthenticatedCrmUser? actor)
+        => IsImportOperator(actor) || CanManageCommercialAssignments(actor);
+
+    public static bool CanSeeAllCommercialProcesses(AuthenticatedCrmUser? actor)
+        => IsImportOperator(actor);
 }
 
 internal static class CrmUserContext

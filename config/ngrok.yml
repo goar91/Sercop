@@ -1,0 +1,13 @@
+version: 3
+authtoken: ${NGROK_AUTHTOKEN}
+
+tunnels:
+  crm:
+    proto: http
+    addr: host.docker.internal:8080
+    domain: ${CRM_NGROK_DOMAIN}
+  
+  nutrition:
+    proto: http
+    addr: host.docker.internal:8080
+    domain: ${NUTRITION_NGROK_DOMAIN}

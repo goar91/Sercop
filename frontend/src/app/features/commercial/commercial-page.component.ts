@@ -2,7 +2,13 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
+
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatIconModule } from '@angular/material/icon';
+
 import { CrmApiService } from '../../crm-api.service';
 import { AuthService } from '../../core/auth.service';
 import {
@@ -10,18 +16,39 @@ import {
   OpportunityActivity,
   OpportunityDetail,
   OpportunityListItem,
+  OpportunityProcessCategory,
   OpportunityVisibility,
   SavedView,
+  SercopOperationalStatus,
   User,
   Zone,
 } from '../../models';
 
 type CommercialGrouping = 'age' | 'status';
+type CommercialFilters = {
+  search: string;
+  entity: string;
+  processCode: string;
+  keyword: string;
+  estado: string;
+  zoneId: string;
+  assignedUserId: string;
+  processCategory: OpportunityProcessCategory;
+  invitedOnly: boolean;
+  todayOnly: boolean;
+};
 
 @Component({
   selector: 'app-commercial-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe],
+  imports: [
+    CommonModule,
+    FormsModule,
+    DatePipe,
+    MatButtonModule,
+    MatCardModule,
+    MatIconModule,
+  ],
   templateUrl: './commercial-page.component.html',
   styleUrl: './commercial-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -29,12 +56,15 @@ type CommercialGrouping = 'age' | 'status';
 export class CommercialPageComponent {
   private readonly api = inject(CrmApiService);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
   private readonly ecuadorDateFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Guayaquil',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
   });
+  private listRequestSequence = 0;
+  private readonly scope = (this.route.snapshot.data['scope'] as 'chemistry' | 'all') ?? 'chemistry';
 
   protected readonly loading = signal(true);
   protected readonly detailLoading = signal(false);
@@ -45,35 +75,82 @@ export class CommercialPageComponent {
   protected readonly activities = signal<OpportunityActivity[]>([]);
   protected readonly selectedOpportunity = signal<OpportunityDetail | null>(null);
   protected readonly alertSummary = signal<CommercialAlertSummary | null>(null);
+  protected readonly sercopStatus = signal<SercopOperationalStatus | null>(null);
   protected readonly totalCount = signal(0);
-  protected readonly page = signal(1);
+  protected readonly currentPage = signal(1);
   protected readonly pageSize = signal(25);
   protected readonly errorMessage = signal('');
   protected readonly supportVisibility = signal<OpportunityVisibility | null>(null);
+  protected readonly visibilityImporting = signal(false);
   protected readonly grouping = signal<CommercialGrouping>('age');
   protected readonly currentUser = this.auth.currentUser;
+  protected readonly isAllScope = computed(() => this.scope === 'all');
   protected readonly isSeller = computed(() => this.auth.hasAnyRole('seller'));
+  protected readonly isImportOperator = computed(() => this.currentUser()?.loginName?.toLowerCase() === 'importaciones');
   protected readonly canManageAssignments = computed(() => this.auth.hasAnyRole('admin', 'gerencia', 'coordinator'));
   protected readonly canConfirmInvitation = this.canManageAssignments;
   protected readonly sellerBanner = computed(() => this.isSeller() ? 'Solo estas viendo los procesos asignados a tu usuario vendedor.' : '');
+  protected readonly importOperatorBanner = computed(() => this.isImportOperator() ? 'Perfil importaciones: ves todos los procesos; solo se aplican los filtros que actives manualmente.' : '');
   protected readonly visibleSellerUsers = computed(() => this.users().filter((user) => user.role === 'seller' && user.active));
   protected readonly commercialAlerts = computed(() => this.alertSummary()?.items ?? []);
-  protected readonly totalPages = computed(() => Math.max(1, Math.ceil(this.totalCount() / this.pageSize())));
+  protected readonly shouldShowAlertPanel = computed(() => !this.isSeller() || this.alertSummary()?.showForCurrentUser === true);
   protected readonly selectedOpportunityId = computed(() => this.selectedOpportunity()?.id ?? null);
+  protected readonly processCategoryTabs: ReadonlyArray<{ value: OpportunityProcessCategory; label: string }> = [
+    { value: 'all', label: 'Todos' },
+    { value: 'infimas', label: 'Ínfimas' },
+    { value: 'nco', label: 'NCO' },
+    { value: 'sie', label: 'SIE' },
+    { value: 're', label: 'Régimen Especial' },
+  ];
+  protected readonly totalPages = computed(() =>
+    Math.max(1, Math.ceil(Math.max(0, this.totalCount()) / Math.max(1, this.pageSize())))
+  );
+  protected readonly pageRangeLabel = computed(() => {
+    const total = this.totalCount();
+    const items = this.opportunities().length;
+    const page = this.currentPage();
+    const size = this.pageSize();
+    if (total <= 0 || items <= 0) {
+      return 'Sin procesos';
+    }
+
+    const start = (page - 1) * size + 1;
+    const end = start + items - 1;
+    return `Mostrando ${start}-${end} de ${total}`;
+  });
   protected readonly workspaceHighlights = computed(() => {
     const items = this.opportunities();
-    const invited = items.filter((item) => item.isInvitedMatch).length;
-    const pending = items.filter((item) => item.hasPendingAction).length;
-    const unassigned = items.filter((item) => !item.assignedUserName).length;
-    const overdue = items.filter((item) => item.daysOpen > 1 && !item.isInvitedMatch).length;
+    let invited = 0;
+    let pending = 0;
+    let unassigned = 0;
+    let overdue = 0;
+
+    for (const item of items) {
+      if (item.isInvitedMatch) {
+        invited += 1;
+      }
+
+      if (item.hasPendingAction) {
+        pending += 1;
+      }
+
+      if (!item.assignedUserName) {
+        unassigned += 1;
+      }
+
+      if (item.daysOpen > 1 && !item.isInvitedMatch) {
+        overdue += 1;
+      }
+    }
+
     const criticalAlerts = this.alertSummary()?.criticalAlerts ?? 0;
 
     return [
-      { label: 'Visibles en pagina', value: items.length, tone: 'neutral' },
-      { label: 'Invitados HDM', value: invited, tone: 'invited' },
-      { label: 'Sin asignar', value: unassigned, tone: 'warning' },
-      { label: 'Mas de 1 dia', value: overdue, tone: 'aging' },
-      { label: 'Con accion pendiente', value: pending, tone: 'priority' },
+      { label: 'Visibles en tablero', value: this.totalCount(), tone: 'neutral' },
+      { label: 'Invitados (pagina)', value: invited, tone: 'invited' },
+      { label: 'Sin asignar (pagina)', value: unassigned, tone: 'warning' },
+      { label: 'Mas de 1 dia (pagina)', value: overdue, tone: 'aging' },
+      { label: 'Accion pendiente (pagina)', value: pending, tone: 'priority' },
       { label: 'Alertas criticas', value: criticalAlerts, tone: 'critical' },
     ];
   });
@@ -83,6 +160,10 @@ export class CommercialPageComponent {
 
     if (filters.search.trim()) {
       tokens.push(`Busqueda: ${filters.search.trim()}`);
+    }
+
+    if (filters.keyword.trim()) {
+      tokens.push(`Keyword: ${filters.keyword.trim()}`);
     }
 
     if (filters.estado) {
@@ -103,6 +184,10 @@ export class CommercialPageComponent {
       }
     }
 
+    if (filters.processCategory && filters.processCategory !== 'all') {
+      tokens.push(`Tipo: ${this.describeProcessCategory(filters.processCategory)}`);
+    }
+
     if (filters.invitedOnly) {
       tokens.push('Solo invitados HDM');
     }
@@ -118,14 +203,7 @@ export class CommercialPageComponent {
     ? 'Prioriza invitaciones HDM y separa la operacion entre procesos recientes y backlog.'
     : 'Revisa la carga por estado comercial para mover el pipeline con menos friccion.');
 
-  protected readonly filters = signal({
-    search: '',
-    estado: '',
-    zoneId: '',
-    assignedUserId: '',
-    invitedOnly: false,
-    todayOnly: false,
-  });
+  protected readonly filters = signal<CommercialFilters>(this.createDefaultFilters());
 
   protected readonly assignmentForm = signal({
     assignedUserId: '',
@@ -158,21 +236,14 @@ export class CommercialPageComponent {
 
   protected readonly visibilityCode = signal('');
 
-  protected readonly invitedLane = computed(() => this.opportunities().filter((item) => item.isInvitedMatch));
   protected readonly newProcessesLane = computed(() =>
-    this.opportunities()
-      .filter((item) => !item.isInvitedMatch && this.isPublishedTodayInEcuador(item))
-      .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
+    this.opportunities().filter((item) => this.getDaysSincePublication(item) === 0)
   );
   protected readonly currentLane = computed(() =>
-    this.opportunities()
-      .filter((item) => !item.isInvitedMatch && !this.isPublishedTodayInEcuador(item) && item.daysOpen <= 1)
-      .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
+    this.opportunities().filter((item) => this.getDaysSincePublication(item) === 1)
   );
   protected readonly staleLane = computed(() =>
-    this.opportunities()
-      .filter((item) => !item.isInvitedMatch && item.daysOpen > 1)
-      .sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a))
+    this.opportunities().filter((item) => this.getDaysSincePublication(item) > 1)
   );
   protected readonly statusGroups = computed(() => {
     const groups = new Map<string, OpportunityListItem[]>();
@@ -183,19 +254,33 @@ export class CommercialPageComponent {
       groups.set(key, existing);
     }
 
-    return Array.from(groups.entries()).map(([label, items]) => ({ label, items }));
+    return Array.from(groups.entries())
+      .map(([label, items]) => ({ label, items: this.sortByPublication(items) }))
+      .sort((left, right) => this.getPublicationTimestamp(right.items[0]) - this.getPublicationTimestamp(left.items[0]));
   });
 
   constructor() {
     void this.initialize();
   }
 
-  private isPublishedTodayInEcuador(item: OpportunityListItem): boolean {
-    return this.getEcuadorDateKey(item.fechaPublicacion) === this.getEcuadorTodayKey();
-  }
-
   private getPublicationTimestamp(item: OpportunityListItem): number {
     return item.fechaPublicacion ? new Date(item.fechaPublicacion).getTime() : 0;
+  }
+
+  private sortByPublication(items: OpportunityListItem[]): OpportunityListItem[] {
+    return [...items].sort((a, b) => this.getPublicationTimestamp(b) - this.getPublicationTimestamp(a));
+  }
+
+  private getDaysSincePublication(item: OpportunityListItem): number {
+    const publicationKey = this.getEcuadorDateKey(item.fechaPublicacion);
+    const todayKey = this.getEcuadorTodayKey();
+    if (!publicationKey || !todayKey) {
+      return Number.MAX_SAFE_INTEGER;
+    }
+
+    const publicationDate = new Date(`${publicationKey}T00:00:00-05:00`);
+    const todayDate = new Date(`${todayKey}T00:00:00-05:00`);
+    return Math.max(0, Math.floor((todayDate.getTime() - publicationDate.getTime()) / 86400000));
   }
 
   private getEcuadorTodayKey(): string {
@@ -219,8 +304,56 @@ export class CommercialPageComponent {
     return year && month && day ? `${year}-${month}-${day}` : null;
   }
 
-  protected patchFilters<K extends keyof ReturnType<typeof this.filters>>(field: K, value: ReturnType<typeof this.filters>[K]): void {
+  protected patchFilters<K extends keyof CommercialFilters>(field: K, value: CommercialFilters[K]): void {
     this.filters.update((current) => ({ ...current, [field]: value }));
+    this.currentPage.set(1);
+  }
+
+  protected async clearFilters(): Promise<void> {
+    this.filters.set(this.createDefaultFilters());
+    this.currentPage.set(1);
+    await this.loadList();
+  }
+
+  protected goToFirstPage(): void {
+    if (this.currentPage() === 1) {
+      return;
+    }
+
+    this.currentPage.set(1);
+    void this.loadList();
+  }
+
+  protected goToPreviousPage(): void {
+    const next = Math.max(1, this.currentPage() - 1);
+    if (next === this.currentPage()) {
+      return;
+    }
+
+    this.currentPage.set(next);
+    void this.loadList();
+  }
+
+  protected goToNextPage(): void {
+    const next = Math.min(this.totalPages(), this.currentPage() + 1);
+    if (next === this.currentPage()) {
+      return;
+    }
+
+    this.currentPage.set(next);
+    void this.loadList();
+  }
+
+  protected setPageSize(value: number | string): void {
+    const parsed = Number(value);
+    const next = Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 25;
+    if (next === this.pageSize()) {
+      return;
+    }
+
+    this.pageSize.set(next);
+    this.currentPage.set(1);
+    void this.loadList();
   }
 
   protected patchAssignmentForm<K extends keyof ReturnType<typeof this.assignmentForm>>(field: K, value: ReturnType<typeof this.assignmentForm>[K]): void {
@@ -244,7 +377,6 @@ export class CommercialPageComponent {
   }
 
   protected async reload(): Promise<void> {
-    this.page.set(1);
     await this.loadList();
   }
 
@@ -358,9 +490,13 @@ export class CommercialPageComponent {
     try {
       const parsed = JSON.parse(view.filtersJson) as {
         search?: string;
+        entity?: string;
+        processCode?: string;
+        keyword?: string;
         estado?: string;
         zoneId?: string;
         assignedUserId?: string;
+        processCategory?: OpportunityProcessCategory;
         invitedOnly?: boolean;
         todayOnly?: boolean;
         grouping?: CommercialGrouping;
@@ -368,14 +504,18 @@ export class CommercialPageComponent {
 
       this.filters.set({
         search: parsed.search ?? '',
+        entity: parsed.entity ?? '',
+        processCode: parsed.processCode ?? '',
+        keyword: parsed.keyword ?? '',
         estado: parsed.estado ?? '',
         zoneId: parsed.zoneId ?? '',
         assignedUserId: parsed.assignedUserId ?? '',
+        processCategory: this.normalizeProcessCategoryFilter(parsed.processCategory),
         invitedOnly: parsed.invitedOnly ?? false,
         todayOnly: parsed.todayOnly ?? false,
       });
       this.grouping.set(parsed.grouping ?? 'age');
-      this.page.set(1);
+      this.currentPage.set(1);
       await this.loadList();
     } catch {
       this.errorMessage.set('La vista guardada no se pudo leer.');
@@ -403,23 +543,31 @@ export class CommercialPageComponent {
     await this.loadSavedViews();
   }
 
-  protected async changePage(delta: number): Promise<void> {
-    const nextPage = this.page() + delta;
-    if (nextPage < 1 || nextPage > this.totalPages()) {
-      return;
-    }
-
-    this.page.set(nextPage);
-    await this.loadList();
-  }
-
   protected export(format: 'csv' | 'excel'): void {
     window.open(this.api.exportOpportunitiesUrl({
       format,
       ...this.filters(),
+      chemistryOnly: !this.isAllScope(),
       zoneId: this.filters().zoneId ? Number(this.filters().zoneId) : null,
       assignedUserId: this.filters().assignedUserId ? Number(this.filters().assignedUserId) : null,
     }), '_blank');
+  }
+
+  protected describeProcessCategory(value: OpportunityProcessCategory): string {
+    switch (value) {
+      case 'infimas':
+        return 'Ínfimas';
+      case 'nco':
+        return 'Necesidades de contratación';
+      case 'sie':
+        return 'Subastas inversas';
+      case 're':
+        return 'Régimen especial';
+      case 'other_public':
+        return 'Otros procesos públicos';
+      default:
+        return 'Todos';
+    }
   }
 
   protected async runVisibilityCheck(): Promise<void> {
@@ -429,6 +577,28 @@ export class CommercialPageComponent {
     }
 
     this.supportVisibility.set(await firstValueFrom(this.api.getOpportunityVisibility(code, this.filters().todayOnly)));
+  }
+
+  protected async importVisibilityCode(): Promise<void> {
+    if (!this.canManageAssignments()) {
+      return;
+    }
+
+    const code = this.visibilityCode().trim();
+    if (!code) {
+      return;
+    }
+
+    this.visibilityImporting.set(true);
+    try {
+      await firstValueFrom(this.api.importOpportunityByCode(code));
+      await this.runVisibilityCheck();
+      await this.loadList();
+    } catch (error) {
+      this.errorMessage.set(this.extractError(error));
+    } finally {
+      this.visibilityImporting.set(false);
+    }
   }
 
   protected openProcess(url: string): void {
@@ -495,14 +665,17 @@ export class CommercialPageComponent {
   }
 
   private async loadDependencies(): Promise<void> {
-    const [zones, users] = await Promise.all([
+    const [zones, users, views, sercopStatus] = await Promise.all([
       firstValueFrom(this.api.getZones()),
       firstValueFrom(this.api.getUsers(1, 100)),
+      firstValueFrom(this.api.getSavedViews('commercial', 1, 30)),
+      firstValueFrom(this.api.getSercopOperationalStatus()),
     ]);
 
     this.zones.set(zones);
     this.users.set(users.items);
-    await this.loadSavedViews();
+    this.savedViews.set(views.items);
+    this.sercopStatus.set(sercopStatus);
   }
 
   private async loadSavedViews(): Promise<void> {
@@ -511,42 +684,61 @@ export class CommercialPageComponent {
   }
 
   private async loadList(): Promise<void> {
+    const requestId = ++this.listRequestSequence;
     this.loading.set(true);
     this.errorMessage.set('');
     try {
       const filters = this.filters();
-      const [response, alerts] = await Promise.all([
+      const page = this.currentPage();
+      const pageSize = this.pageSize();
+      const [items, alerts] = await Promise.all([
         firstValueFrom(this.api.getOpportunities({
-          search: filters.search || undefined,
+          search: filters.search.trim() || undefined,
+          entity: filters.entity.trim() || undefined,
+          processCode: filters.processCode.trim() || undefined,
+          keyword: filters.keyword.trim() || undefined,
           estado: filters.estado || undefined,
           zoneId: filters.zoneId ? Number(filters.zoneId) : null,
           assignedUserId: filters.assignedUserId ? Number(filters.assignedUserId) : null,
+          processCategory: filters.processCategory,
           invitedOnly: filters.invitedOnly,
           todayOnly: filters.todayOnly,
-          page: this.page(),
-          pageSize: this.pageSize(),
+          chemistryOnly: !this.isAllScope(),
+          page,
+          pageSize,
         })),
         firstValueFrom(this.api.getCommercialAlerts()),
       ]);
 
-      this.opportunities.set(response.items);
-      this.totalCount.set(response.totalCount);
+      if (requestId !== this.listRequestSequence) {
+        return;
+      }
+
+      const itemsSorted = this.sortByPublication(items.items);
+      this.opportunities.set(itemsSorted);
+      this.totalCount.set(items.totalCount);
       this.alertSummary.set(alerts);
 
       const selectedId = this.selectedOpportunityId();
-      const selectedStillVisible = selectedId ? response.items.some((item) => item.id === selectedId) : false;
+      const selectedStillVisible = selectedId ? itemsSorted.some((item) => item.id === selectedId) : false;
       if (!selectedStillVisible) {
         this.selectedOpportunity.set(null);
         this.activities.set([]);
       }
 
-      if (!this.selectedOpportunity() && response.items.length > 0) {
-        await this.selectOpportunity(response.items[0]);
+      if (!this.selectedOpportunity() && itemsSorted.length > 0) {
+        await this.selectOpportunity(itemsSorted[0]);
       }
     } catch (error) {
+      if (requestId !== this.listRequestSequence) {
+        return;
+      }
+
       this.errorMessage.set(this.extractError(error));
     } finally {
-      this.loading.set(false);
+      if (requestId === this.listRequestSequence) {
+        this.loading.set(false);
+      }
     }
   }
 
@@ -556,5 +748,39 @@ export class CommercialPageComponent {
     }
 
     return 'No se pudo completar la operacion.';
+  }
+
+  private normalizeProcessCategoryFilter(value: string | null | undefined): OpportunityProcessCategory {
+    switch ((value ?? '').trim().toLowerCase()) {
+      case 'nco_infimas':
+        return 'nco';
+      case 'regimen_especial':
+        return 're';
+      case 'procesos_contratacion':
+        return 'other_public';
+      case 'infimas':
+      case 'nco':
+      case 'sie':
+      case 're':
+      case 'other_public':
+        return value as OpportunityProcessCategory;
+      default:
+        return 'all';
+    }
+  }
+
+  private createDefaultFilters(): CommercialFilters {
+    return {
+      search: '',
+      entity: '',
+      processCode: '',
+      keyword: '',
+      estado: '',
+      zoneId: '',
+      assignedUserId: '',
+      processCategory: 'all',
+      invitedOnly: false,
+      todayOnly: false,
+    };
   }
 }

@@ -6,8 +6,6 @@
 - API del CRM: `http://localhost:5050/api`
 - n8n: `http://localhost:5678`
 - Mailpit: `http://localhost:8025`
-- Ollama: `http://localhost:11434`
-- Qdrant: `http://localhost:6333`
 
 ## Arranque
 
@@ -23,7 +21,7 @@
 
 - Dashboard con totales, invitados HDM, asignados y workflows.
 - Lista de procesos con filtros por estado, zona, vendedor y flag de invitacion confirmada.
-- Ficha detallada del proceso con notas CRM, analisis IA, documentos e historial.
+- Ficha detallada del proceso con notas CRM, documentos e historial.
 - Panel para confirmar invitacion HDM y modulo para importar codigos de procesos invitados desde el propio CRM.
 - Configuracion de zonas y usuarios comerciales.
 - Visor de workflows n8n con los nodos ya posicionados segun el JSON real de `workflow_entity`.
@@ -45,8 +43,6 @@
    - `01 SERCOP OCDS Poller`
    - `02 SERCOP NCO Poller`
    - `03 SERCOP Manual Analysis`
-   - `04 SERCOP Chat`
-   - `05 Programming Chat`
    - `06 Feedback Weekly`
 4. n8n muestra el canvas completo y puedes editar cada nodo desde su panel lateral.
 

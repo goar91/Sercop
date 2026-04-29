@@ -1,5 +1,12 @@
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatIconModule } from '@angular/material/icon';
+import { MatListModule } from '@angular/material/list';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatToolbarModule } from '@angular/material/toolbar';
 import { firstValueFrom } from 'rxjs';
 import { CrmApiService } from '../../crm-api.service';
 import { WorkflowDetail, WorkflowSummary } from '../../models';
@@ -7,7 +14,16 @@ import { WorkflowDetail, WorkflowSummary } from '../../models';
 @Component({
   selector: 'app-workflows-page',
   standalone: true,
-  imports: [CommonModule],
+  imports: [
+    CommonModule,
+    MatButtonModule,
+    MatCardModule,
+    MatDividerModule,
+    MatIconModule,
+    MatListModule,
+    MatProgressSpinnerModule,
+    MatToolbarModule,
+  ],
   templateUrl: './workflows-page.component.html',
   styleUrl: './workflows-page.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

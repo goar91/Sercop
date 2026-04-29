@@ -66,6 +66,7 @@ public sealed record CommercialAlertSummaryDto(
     int TotalAlerts,
     int CriticalAlerts,
     int WarningAlerts,
+    bool ShowForCurrentUser,
     IReadOnlyList<CommercialAlertItemDto> Items
 );
 
@@ -78,6 +79,7 @@ public sealed record OpportunityListItemDto(
     string Titulo,
     string? Entidad,
     string? Tipo,
+    string ProcessCategory,
     DateTimeOffset? FechaPublicacion,
     DateTimeOffset? FechaLimite,
     decimal? MontoRef,
@@ -86,8 +88,9 @@ public sealed record OpportunityListItemDto(
     bool IsInvitedMatch,
     string? InvitationSource,
     DateTimeOffset? InvitationVerifiedAt,
+    string CaptureScope,
+    bool IsChemistryCandidate,
     decimal MatchScore,
-    decimal AiScore,
     string? Recomendacion,
     string? Estado,
     string? Resultado,
@@ -143,6 +146,7 @@ public sealed record OpportunityDetailDto(
     string Titulo,
     string? Entidad,
     string? Tipo,
+    string ProcessCategory,
     DateTimeOffset? FechaPublicacion,
     DateTimeOffset? FechaLimite,
     decimal? MontoRef,
@@ -154,8 +158,10 @@ public sealed record OpportunityDetailDto(
     string? InvitationNotes,
     string? InvitationEvidenceUrl,
     DateTimeOffset? InvitationVerifiedAt,
+    string CaptureScope,
+    bool IsChemistryCandidate,
+    IReadOnlyList<string> ClassificationReasons,
     decimal MatchScore,
-    decimal AiScore,
     string? Recomendacion,
     string? Estado,
     string? Vendedor,
@@ -210,7 +216,22 @@ public sealed record OpportunityVisibilityDto(
     bool ExistsInDatabase,
     bool Visible,
     long? OpportunityId,
+    string? ProcessCategory,
+    string? CaptureScope,
+    bool? IsChemistryCandidate,
+    bool IsInvitedMatch,
+    IReadOnlyList<string> ClassificationReasons,
     IReadOnlyList<string> Reasons
+);
+
+public sealed record SercopOperationalStatusDto(
+    bool Configured,
+    string? MaskedRuc,
+    string? MaskedUserName,
+    string? ValidationStatus,
+    DateTimeOffset? LastValidatedAt,
+    string PortalSessionStatus,
+    DateTimeOffset? LastPortalLoginAt
 );
 
 public sealed record ImportOpportunityByCodeRequest(
@@ -282,6 +303,23 @@ public sealed record KeywordRuleDto(
     DateTimeOffset UpdatedAt
 );
 
+public sealed record KeywordRefreshRunDto(
+    long Id,
+    string TriggerType,
+    string Status,
+    long? KeywordRuleId,
+    long? InitiatedByUserId,
+    string? InitiatedByLoginName,
+    int RequestedWindowDays,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? FinishedAt,
+    int ReevaluatedCount,
+    int CapturedCount,
+    int ErrorCount,
+    string? ErrorMessage
+);
+
 public sealed record KeywordRuleUpsertRequest(
     string RuleType,
     string Scope,
@@ -290,6 +328,25 @@ public sealed record KeywordRuleUpsertRequest(
     decimal Weight,
     string? Notes,
     bool Active
+);
+
+public sealed record SercopCredentialStatusDto(
+    bool Configured,
+    string? MaskedRuc,
+    string? MaskedUserName,
+    string? ConfiguredByLoginName,
+    DateTimeOffset? ConfiguredAt,
+    string? ValidationStatus,
+    DateTimeOffset? LastValidatedAt,
+    string? LastValidationError,
+    string PortalSessionStatus,
+    DateTimeOffset? LastPortalLoginAt
+);
+
+public sealed record SercopCredentialsUpsertRequest(
+    string Ruc,
+    string UserName,
+    string Password
 );
 
 public sealed record WorkflowNodeDto(

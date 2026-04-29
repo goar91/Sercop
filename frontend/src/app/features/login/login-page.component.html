@@ -1,34 +1,97 @@
-<section class="login-shell">
-  <article class="login-card">
-    <div class="heading">
-      <span class="eyebrow">HDM SERCOP</span>
-      <h1>Workspace comercial y operativo</h1>
-      <p>Accede con tu login o correo para operar procesos, gerencia y automatizaciones.</p>
-    </div>
+<div class="login-container">
+  <mat-card class="login-card">
+    <mat-card-header>
+      <div class="login-header">
+        <div class="logo-wrapper">
+          <mat-icon class="logo-icon">security</mat-icon>
+        </div>
+        <h1 class="login-title">Automatización SERCOP</h1>
+        <p class="login-subtitle">Workspace comercial y operativo</p>
+        <p class="login-description">
+          Accede con tus credenciales para operar procesos, gerencia y automatizaciones.
+        </p>
+      </div>
+    </mat-card-header>
 
-    <form (ngSubmit)="submit()" class="login-form">
-      <label>
-        <span>Login o correo</span>
-        <input [(ngModel)]="form.identifier" name="identifier" autocomplete="username" required />
-      </label>
+    <mat-card-content>
+      <form [formGroup]="form" (ngSubmit)="submit()" class="login-form">
+        <!-- Username/Email Field -->
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Login o correo</mat-label>
+          <input matInput formControlName="identifier" autocomplete="username" required />
+          <mat-icon matPrefix>person</mat-icon>
+          @if (form.get('identifier')?.hasError('required') && form.get('identifier')?.touched) {
+            <mat-error>El login o correo es requerido</mat-error>
+          }
+        </mat-form-field>
 
-      <label>
-        <span>Clave</span>
-        <input [(ngModel)]="form.password" name="password" type="password" autocomplete="current-password" required />
-      </label>
+        <!-- Password Field -->
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Contraseña</mat-label>
+          <input
+            matInput
+            formControlName="password"
+            [type]="hidePassword() ? 'password' : 'text'"
+            autocomplete="current-password"
+            required
+          />
+          <mat-icon matPrefix>lock</mat-icon>
+          <button
+            mat-icon-button
+            matSuffix
+            (click)="togglePasswordVisibility()"
+            type="button"
+            [attr.aria-label]="hidePassword() ? 'Mostrar contraseña' : 'Ocultar contraseña'"
+          >
+            <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
+          @if (form.get('password')?.hasError('required') && form.get('password')?.touched) {
+            <mat-error>La contraseña es requerida</mat-error>
+          }
+          @if (form.get('password')?.hasError('minlength') && form.get('password')?.touched) {
+            <mat-error>La contraseña debe tener al menos 6 caracteres</mat-error>
+          }
+        </mat-form-field>
 
-      <label class="checkbox">
-        <input [(ngModel)]="form.rememberMe" name="rememberMe" type="checkbox" />
-        <span>Mantener sesion en este equipo</span>
-      </label>
+        <!-- Remember Me Checkbox -->
+        <div class="remember-me">
+          <mat-checkbox formControlName="rememberMe" color="primary">
+            Mantener sesión en este equipo
+          </mat-checkbox>
+        </div>
 
-      @if (errorMessage()) {
-        <div class="error">{{ errorMessage() }}</div>
-      }
+        <!-- Submit Button -->
+        <button
+          mat-raised-button
+          color="primary"
+          type="submit"
+          [disabled]="submitting() || form.invalid"
+          class="full-width submit-button"
+        >
+          @if (submitting()) {
+            <mat-spinner diameter="20" class="button-spinner"></mat-spinner>
+            <span>Ingresando...</span>
+          } @else {
+            <ng-container>
+              <mat-icon>login</mat-icon>
+              <span>Entrar al CRM</span>
+            </ng-container>
+          }
+        </button>
+      </form>
 
-      <button type="submit" [disabled]="submitting()">
-        {{ submitting() ? 'Ingresando...' : 'Entrar al CRM' }}
-      </button>
-    </form>
-  </article>
-</section>
+      <!-- Footer -->
+      <div class="login-footer">
+        <p class="footer-text">
+          ¿Problemas para acceder?
+          <a href="#" class="footer-link">Contactar soporte</a>
+        </p>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <!-- Background decoration -->
+  <div class="background-decoration decoration-1"></div>
+  <div class="background-decoration decoration-2"></div>
+</div>
+
