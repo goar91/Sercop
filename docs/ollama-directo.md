@@ -42,6 +42,15 @@ Usa `Terminal > Run Task...` y elige:
 - `Ollama directo`
 - `Ollama directo - prueba rapida`
 
+## Flujo automatico con Codex
+
+El proyecto queda preparado para un flujo mixto:
+
+- Ollama local: apoyo basico, borradores, explicaciones cortas y consultas rapidas.
+- Codex: programacion seria, lectura del repositorio, edicion de archivos, pruebas, commits y pushes.
+
+La regla es: Ollama puede sugerir, pero Codex decide, implementa y verifica.
+
 ## Nota
 
 Ollama directo no edita archivos por si solo como Claude Code. Sirve para preguntar, generar codigo, explicar errores o pedir comandos. Para aplicar cambios en el proyecto, copia la respuesta util y ejecuta los comandos o edita los archivos desde el editor.
